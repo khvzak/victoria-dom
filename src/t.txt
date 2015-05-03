@@ -1,0 +1,115 @@
+
+
+fn main() {
+
+    let _parse_fn = |html: &String| -> () {
+
+        //let mut tree = TreeNode { parent: None, elem: NodeElem::Tag { name: "root".to_string(), attrs: None, childs: Vec::new() } };
+        //let mut current = tree;
+
+        let re = Regex::new(&_token_re_str).unwrap();
+        for caps in re.captures_iter(html) {
+            let text = caps.at(1);
+            let doctype = caps.at(2);
+            let comment = caps.at(3);
+            let cdata = caps.at(4);
+            let pi = caps.at(5);
+            let tag = caps.at(6);
+            let runaway = caps.at(11);
+
+            // Text
+            if text.is_some() {
+                let mut text_ok = text.unwrap().to_string();
+                if runaway.is_some() {
+                    text_ok.push_str("<");
+                };
+                //process_text_node(&current, "text", text_ok); // TODO: html_unescape(text_ok)
+            }
+
+            // Tag
+            if tag.is_some() {
+                let tag_ok = tag.unwrap();
+
+                // End: /tag
+                if tag_ok.starts_with("/") {
+                    let mut tag_end = tag_ok.trim_left_matches('/').trim();
+                    //process_end_tag(&current, tag_end.to_lowercase());
+                }
+                // Start: tag
+                else {
+                    let tag_plus_attrs: Vec<&str> = tag_ok.splitn(2, ' ').collect();
+                    let mut name = tag_plus_attrs.get(0).unwrap().to_string();
+                    let attrs_str = tag_plus_attrs.get(1);
+
+                    // Attributes
+                    let mut attrs = HashMap::new();
+                    let mut is_closing = false;
+                    if attrs_str.is_some() {
+                        for caps in Regex::new(&_attr_re_str).unwrap().captures_iter(attrs_str.unwrap()) {
+                            // TODO: to_lowercase if [stable]
+                            let key = caps.at(1).unwrap().to_string().to_ascii_lowercase();
+                            let value = if caps.at(2).is_some() { caps.at(2) } else if caps.at(3).is_some() { caps.at(3) } else { caps.at(4) };
+
+                            // Empty tag
+                            if key == "/" {
+                                is_closing = true;
+                                continue;
+                            }
+
+                            println!("key: {}", key);
+
+                            attrs.insert(key, value); // TODO: html_unescape value
+                        }
+                    }
+
+                    // "image" is an alias for "img"
+                    if name == "image" { name = "img".to_string() }
+
+                    //process_start_tag(&current, name, attrs);
+
+                    // Element without end tag (self-closing)
+                    //if el_empty.contains(name) || (!el_block.contains(name) && is_closing) {
+                        //process_end_tag(&current, name);
+                    //}
+
+                    // Raw text elements
+                    //if !el_raw.contains(name) && !el_rcdata.contains(name) {
+                    //    continue;
+                    //}
+                    //process_text_node(&current, "raw", if el_rcdata.contains(name) { name } else { name });
+                    //process_end_tag(&current, name);
+                }
+            }
+
+
+
+            println!("text: {}\ntag: {}\n", text.unwrap_or("undef"), tag.unwrap_or("undef"));
+        }
+    };
+
+
+
+    //let _node = |current: TreeNode, type: &String, content: &String| -> () {
+    //
+    //}
+
+    _parse_fn(&r#"<div><p    id="a" claSS="test" рУльКа=свиная>Test</p></div>"#.to_string());
+
+    /*
+    let re = Regex::new(&_attr_re_str).unwrap();
+    for caps in re.captures_iter("id=\"a\" checked=checked") {
+        let key = caps.at(1).unwrap_or("undef").to_string();
+        let value = if caps.at(2).is_some() {
+            caps.at(2)
+        } else if caps.at(3).is_some() {
+            caps.at(3)
+        } else {
+            caps.at(4)
+        };
+
+        let value2 = value.unwrap_or("undef").to_string();
+
+        println!("key: {}\nvalue: {}\n", key, value2);
+    }
+    */
+}
