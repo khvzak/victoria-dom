@@ -127,15 +127,20 @@ lazy_static! {
 
 #[derive(Debug)]
 pub struct TreeNode {
-    parent: Option<Weak<TreeNode>>,
-    elem: NodeElem,
+    pub parent: Option<Weak<TreeNode>>,
+    pub elem: NodeElem,
+    pub id: u32,
 }
 
 #[derive(Debug)]
 pub enum NodeElem {
+    Root {
+        childs: RefCell<Vec<Rc<TreeNode>>>,
+    },
+
     Tag {
         name: String,
-        attrs: Option<BTreeMap<String, Option<String>>>,
+        attrs: BTreeMap<String, Option<String>>,
         childs: RefCell<Vec<Rc<TreeNode>>>,
     },
 
@@ -146,50 +151,85 @@ pub enum NodeElem {
 }
 
 impl TreeNode {
-    fn get_tag_name(&self) -> Option<String> {
+    pub fn get_tag_name(&self) -> Option<&str> {
         match self.elem {
-            NodeElem::Tag { ref name, .. } => Some(name.clone()),
+            NodeElem::Tag { ref name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    pub fn get_tag_attrs<'a>(&'a self) -> Option<&'a BTreeMap<String, Option<String>>> {
+        match self.elem {
+            NodeElem::Tag { name: _, ref attrs, .. } => Some(attrs),
+            _ => None,
+        }
+    }
+
+    pub fn get_parent(&self) -> Option<Rc<TreeNode>> {
+        if self.parent.is_some() {
+            Some(self.parent.clone().unwrap().upgrade().unwrap())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_childs(&self) -> Option<Vec<Rc<TreeNode>>> {
+        match self.elem {
+            NodeElem::Root { ref childs } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
+            NodeElem::Tag { name: _, attrs: _, ref childs } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
             _ => None,
         }
     }
 }
 
-fn _process_text_node(current: &Rc<TreeNode>, elem_type: &String, content: &String) {
+fn _next_id() -> u32 {
+    unsafe {
+        static mut next_id: u32 = 0;
+        let id = next_id;
+        next_id += 1;
+        return id;
+    }
+}
+
+fn _process_text_node(current: &Rc<TreeNode>, elem_type: &str, content: &str) {
     let new_node = Rc::new(
         TreeNode {
             parent: Some(current.downgrade()),
-            elem: NodeElem::Text { elem_type: elem_type.clone(), content: content.clone() }
+            elem: NodeElem::Text { elem_type: elem_type.to_string(), content: content.to_string() },
+            id: _next_id(),
         }
     );
 
     match current.elem {
+        NodeElem::Root { ref childs } => childs.borrow_mut().push(new_node),
         NodeElem::Tag { name: _, attrs: _, ref childs } => childs.borrow_mut().push(new_node),
-        _ => panic!("Can use only `Tag` node as parent"),
+        NodeElem::Text { .. } => panic!("Cannot use `Text` node as parent"),
     };
 }
 
-fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &String, attrs: BTreeMap<String, Option<String>>) -> Rc<TreeNode> {
+fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &str, attrs: BTreeMap<String, Option<String>>) -> Rc<TreeNode> {
     let mut working_node = current.clone();
 
     // Autoclose optional HTML elements
     if working_node.parent.is_some() {
-        if END.contains_key(start_tag.as_str()) {
-            working_node = _process_end_tag(&working_node, &END.get(start_tag.as_str()).unwrap().to_string());
+        if END.contains_key(start_tag) {
+            working_node = _process_end_tag(&working_node, END.get(start_tag).unwrap());
         }
-        else if CLOSE.contains_key(start_tag.as_str()) {
-            let ref allowed = CLOSE.get(start_tag.as_str()).unwrap().0;
-            let ref scope = CLOSE.get(start_tag.as_str()).unwrap().1;
+        else if CLOSE.contains_key(start_tag) {
+            let ref allowed = CLOSE.get(start_tag).unwrap().0;
+            let ref scope = CLOSE.get(start_tag).unwrap().1;
 
             // Close allowed parent elements in scope
             let mut next = working_node.clone();
-            while next.parent.is_some() && !scope.contains(next.get_tag_name().unwrap().as_str()) {
-                let this_tag_name = next.get_tag_name().unwrap();
+            while next.parent.is_some() && !scope.contains(next.clone().get_tag_name().unwrap()) {
+                let this = next.clone();
+                let this_tag_name = this.get_tag_name().unwrap();
 
-                if allowed.contains(this_tag_name.as_str()) {
-                    working_node = _process_end_tag(&working_node, &this_tag_name);
+                if allowed.contains(this_tag_name) {
+                    working_node = _process_end_tag(&working_node, this_tag_name);
                 }
 
-                next = next.parent.clone().unwrap().upgrade().unwrap();
+                next = next.get_parent().unwrap();
             }
         }
     }
@@ -198,46 +238,50 @@ fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &String, attrs: BTreeMa
     let new_node = Rc::new(
         TreeNode {
             parent: Some(working_node.downgrade()),
-            elem: NodeElem::Tag { name: start_tag.clone(), attrs: Some(attrs), childs: RefCell::new(Vec::new()) },
+            elem: NodeElem::Tag { name: start_tag.to_string(), attrs: attrs, childs: RefCell::new(Vec::new()) },
+            id: _next_id(),
         }
     );
 
     match working_node.elem {
+        NodeElem::Root { ref childs } => childs.borrow_mut().push(new_node.clone()),
         NodeElem::Tag { name: _, attrs: _, ref childs } => childs.borrow_mut().push(new_node.clone()),
-        _ => panic!("Can use only `Tag` node as parent"),
+        NodeElem::Text { .. } => panic!("Cannot use `Text` node as parent"),
     }
 
     new_node
 }
 
-fn _process_end_tag(current: &Rc<TreeNode>, end_tag: &String) -> Rc<TreeNode> {
+fn _process_end_tag(current: &Rc<TreeNode>, end_tag: &str) -> Rc<TreeNode> {
     // Search stack for start tag
     let mut next = current.clone();
     while next.parent.is_some() {
-        let this_tag_name = &next.get_tag_name().unwrap();
+        let this = next.clone();
+        let this_tag_name = this.get_tag_name().unwrap();
 
         // Right tag
         if this_tag_name == end_tag {
-            return next;
+            return next.get_parent().unwrap();
         }
 
         // Phrasing content can only cross phrasing content
-        if PHRASING.contains(end_tag.as_str()) && !PHRASING.contains(this_tag_name.as_str()) {
+        if PHRASING.contains(end_tag) && !PHRASING.contains(this_tag_name) {
             return current.clone();
         }
 
-        next = next.parent.clone().unwrap().upgrade().unwrap();
+        next = next.get_parent().unwrap();
     }
 
     // Ignore useless end tag
     current.clone()
 }
 
-pub fn parse(html: &String) -> Rc<TreeNode> {
+pub fn parse(html: &str) -> Rc<TreeNode> {
     let root = Rc::new(
         TreeNode {
             parent: None,
-            elem: NodeElem::Tag { name: "root".to_string(), attrs: None, childs: RefCell::new(Vec::new()) },
+            elem: NodeElem::Root { childs: RefCell::new(Vec::new()) },
+            id: _next_id(),
         }
     );
 
@@ -259,7 +303,7 @@ pub fn parse(html: &String) -> Rc<TreeNode> {
             if runaway.is_some() {
                 text_ok.push_str("<");
             };
-            _process_text_node(&current, &"text".to_string(), &xml_unescape(&text_ok)); // TODO: html_unescape
+            _process_text_node(&current, "text", &xml_unescape(&text_ok)); // TODO: html_unescape
         }
 
         // Tag
@@ -274,7 +318,7 @@ pub fn parse(html: &String) -> Rc<TreeNode> {
             // Start: tag
             else {
                 let tag_plus_attrs: Vec<&str> = tag_ok.splitn(2, ' ').collect();
-                let mut start_tag = tag_plus_attrs.get(0).unwrap().to_string();
+                let mut start_tag: &str = tag_plus_attrs.get(0).unwrap();
                 let attrs_str = tag_plus_attrs.get(1);
 
                 // Attributes
@@ -292,53 +336,55 @@ pub fn parse(html: &String) -> Rc<TreeNode> {
                         }
 
                         attrs.insert(key, match value {
-                            Some(ref x) => Some(xml_unescape(&x.to_string())), // TODO: html_unescape
+                            Some(ref x) => Some(xml_unescape(x)), // TODO: html_unescape
                             None => None,
                         });
                     }
                 }
 
                 // "image" is an alias for "img"
-                if start_tag == "image" { start_tag = "img".to_string() }
+                if start_tag == "image" { start_tag = "img" }
 
                 current = _process_start_tag(&current, &start_tag, attrs);
 
                 // Element without end tag (self-closing)
-                if EMPTY.contains(start_tag.as_str()) || (!BLOCK.contains(start_tag.as_str()) && is_closing) {
-                    current = _process_end_tag(&current, &start_tag);
+                if EMPTY.contains(start_tag) || (!BLOCK.contains(start_tag) && is_closing) {
+                    current = _process_end_tag(&current, start_tag);
                 }
 
                 // Raw text elements
-                if !RAW.contains(start_tag.as_str()) && !RCDATA.contains(start_tag.as_str()) {
+                if !RAW.contains(start_tag) && !RCDATA.contains(start_tag) {
                     continue;
                 }
 
-                _process_text_node(&current, &"raw".to_string(),
-                    &(if RCDATA.contains(start_tag.as_str()) { xml_unescape(&start_tag) } else { start_tag.clone() })
-                );
+                if RCDATA.contains(start_tag) {
+                    _process_text_node(&current, "raw", &xml_unescape(start_tag))
+                } else {
+                    _process_text_node(&current, "raw", start_tag)
+                }
 
-                current = _process_end_tag(&current, &start_tag);
+                current = _process_end_tag(&current, start_tag);
             }
         }
 
         // DOCTYPE
         else if doctype.is_some() {
-            _process_text_node(&current, &"doctype".to_string(), &doctype.unwrap().to_string());
+            _process_text_node(&current, "doctype", doctype.unwrap());
         }
 
         // Comment
         else if comment.is_some() {
-            _process_text_node(&current, &"comment".to_string(), &comment.unwrap().to_string());
+            _process_text_node(&current, "comment", comment.unwrap());
         }
 
         // CDATA
         else if cdata.is_some() {
-            _process_text_node(&current, &"cdata".to_string(), &cdata.unwrap().to_string());
+            _process_text_node(&current, "cdata", cdata.unwrap());
         }
 
         // Processing instruction (? try to detect XML)
         else if pi.is_some() {
-            _process_text_node(&current, &"pi".to_string(), &pi.unwrap().to_string());
+            _process_text_node(&current, "pi", pi.unwrap());
         }
     }
 
@@ -379,19 +425,17 @@ pub fn render (root: &Rc<TreeNode>) -> String {
         },
 
         // Root
-        NodeElem::Tag { name: _, attrs: _, ref childs } if root.parent.is_none() => {
+        NodeElem::Root { ref childs } => {
             return childs.borrow().iter().map(|ref x| { render(x) }).collect::<Vec<String>>().concat();
         },
 
         NodeElem::Tag { ref name, ref attrs, ref childs } => {
             let mut result = "<".to_string() + name;
 
-            if attrs.is_some() {
-                for (key, value) in attrs.clone().unwrap().iter() {
-                    match *value {
-                        Some(ref x) => { result = result + " " + key + "=\"" + &xml_escape(x) + "\"" },
-                        None        => { result = result + " " + key },
-                    }
+            for (key, value) in attrs.iter() {
+                match *value {
+                    Some(ref x) => { result = result + " " + key + "=\"" + &xml_escape(x) + "\"" },
+                    None        => { result = result + " " + key },
                 }
             }
 
