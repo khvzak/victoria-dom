@@ -1,7 +1,7 @@
-#![feature(convert, alloc, collections)]
-
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 extern crate regex;
+extern crate uuid;
 
 macro_rules! hashset {
     ( $( $x:expr ),* ) => { {

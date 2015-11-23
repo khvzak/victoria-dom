@@ -6,6 +6,7 @@ use std::rc::Rc;
 use std::rc::Weak;
 use std::cell::RefCell;
 
+use uuid::Uuid;
 use regex::Regex;
 
 use util::{xml_escape, xml_unescape};
@@ -15,10 +16,10 @@ lazy_static! {
         r"([^<>=\s/]+|/)" +         // Key
         r"(?:" +
             r"\s*=\s*" +
-            r"(?:"+
-                r#""([^"]*?)""# +   // Quotation marks
+            r"(?s:" +
+                r#""(.*?)""# +      // Quotation marks
             r"|" +
-                r"'([^']*?)'" +     // Apostrophes
+                r"'(.*?)'" +        // Apostrophes
             r"|" +
                 r"([^>\s]*)" +      // Unquoted
             r")" +
@@ -39,8 +40,6 @@ lazy_static! {
             r"|" +
                 r"\?(.*?)\?" +                                      // Processing Instruction
             r"|" +
-                // it would be nice to write:
-                // r"\s*([^<>\s]+\s*(?:(?:" + &_attr_re_str + r"){0,32766})*+)" +
                 r"\s*([^<>\s]+\s*(?:" + &*ATTR_RE_STR + r")*)" +    // Tag
             r")>" +
         r"|" +
@@ -127,9 +126,9 @@ lazy_static! {
 
 #[derive(Debug)]
 pub struct TreeNode {
+    pub id: Uuid,
     pub parent: Option<Weak<TreeNode>>,
     pub elem: NodeElem,
-    pub id: u32,
 }
 
 #[derive(Debug)]
@@ -160,49 +159,48 @@ impl TreeNode {
 
     pub fn get_tag_attrs<'a>(&'a self) -> Option<&'a BTreeMap<String, Option<String>>> {
         match self.elem {
-            NodeElem::Tag { name: _, ref attrs, .. } => Some(attrs),
+            NodeElem::Tag { ref attrs, .. } => Some(attrs),
             _ => None,
         }
     }
 
     pub fn get_parent(&self) -> Option<Rc<TreeNode>> {
-        if self.parent.is_some() {
-            Some(self.parent.clone().unwrap().upgrade().unwrap())
-        } else {
-            None
+        match self.parent {
+            Some(ref x) => Some(x.upgrade().unwrap()),  // strong reference should alive, force unwrap it
+            _ => None,
         }
     }
 
     pub fn get_childs(&self) -> Option<Vec<Rc<TreeNode>>> {
         match self.elem {
             NodeElem::Root { ref childs } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
-            NodeElem::Tag { name: _, attrs: _, ref childs } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
+            NodeElem::Tag { ref childs, .. } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
             _ => None,
         }
     }
-}
 
-fn _next_id() -> u32 {
-    unsafe {
-        static mut next_id: u32 = 0;
-        let id = next_id;
-        next_id += 1;
-        return id;
+    pub fn dbg_string(&self) -> String {
+        let id = self.id;
+        match self.elem {
+            NodeElem::Root { .. } => format!("[{}] TreeNode:Root", id),
+            NodeElem::Tag { ref name, ref attrs, .. } => format!("[{}] TreeNode:Tag(name: {}, attrs: {:?})", id, name, attrs),
+            NodeElem::Text { ref elem_type, ref content } => format!("[{}] TreeNode:Text(type: {}, content: {})", id, elem_type, content),
+        }
     }
 }
 
 fn _process_text_node(current: &Rc<TreeNode>, elem_type: &str, content: &str) {
     let new_node = Rc::new(
         TreeNode {
-            parent: Some(current.downgrade()),
+            id: Uuid::new_v4(),
+            parent: Some(Rc::downgrade(current)),
             elem: NodeElem::Text { elem_type: elem_type.to_string(), content: content.to_string() },
-            id: _next_id(),
         }
     );
 
     match current.elem {
         NodeElem::Root { ref childs } => childs.borrow_mut().push(new_node),
-        NodeElem::Tag { name: _, attrs: _, ref childs } => childs.borrow_mut().push(new_node),
+        NodeElem::Tag { ref childs, .. } => childs.borrow_mut().push(new_node),
         NodeElem::Text { .. } => panic!("Cannot use `Text` node as parent"),
     };
 }
@@ -212,12 +210,11 @@ fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &str, attrs: BTreeMap<S
 
     // Autoclose optional HTML elements
     if working_node.parent.is_some() {
-        if END.contains_key(start_tag) {
-            working_node = _process_end_tag(&working_node, END.get(start_tag).unwrap());
+        if let Some(end_tag) = END.get(start_tag) {
+            working_node = _process_end_tag(&working_node, end_tag);
         }
-        else if CLOSE.contains_key(start_tag) {
-            let ref allowed = CLOSE.get(start_tag).unwrap().0;
-            let ref scope = CLOSE.get(start_tag).unwrap().1;
+        else if let Some(x) = CLOSE.get(start_tag) {
+            let (ref allowed, ref scope) = *x;
 
             // Close allowed parent elements in scope
             let mut next = working_node.clone();
@@ -237,15 +234,15 @@ fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &str, attrs: BTreeMap<S
     // New tag
     let new_node = Rc::new(
         TreeNode {
-            parent: Some(working_node.downgrade()),
+            id: Uuid::new_v4(),
+            parent: Some(Rc::downgrade(&working_node)),
             elem: NodeElem::Tag { name: start_tag.to_string(), attrs: attrs, childs: RefCell::new(Vec::new()) },
-            id: _next_id(),
         }
     );
 
     match working_node.elem {
         NodeElem::Root { ref childs } => childs.borrow_mut().push(new_node.clone()),
-        NodeElem::Tag { name: _, attrs: _, ref childs } => childs.borrow_mut().push(new_node.clone()),
+        NodeElem::Tag { ref childs, .. } => childs.borrow_mut().push(new_node.clone()),
         NodeElem::Text { .. } => panic!("Cannot use `Text` node as parent"),
     }
 
@@ -279,9 +276,9 @@ fn _process_end_tag(current: &Rc<TreeNode>, end_tag: &str) -> Rc<TreeNode> {
 pub fn parse(html: &str) -> Rc<TreeNode> {
     let root = Rc::new(
         TreeNode {
+            id: Uuid::new_v4(),
             parent: None,
             elem: NodeElem::Root { childs: RefCell::new(Vec::new()) },
-            id: _next_id(),
         }
     );
 
@@ -298,34 +295,33 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
         let runaway = caps.at(11);
 
         // Text (and runaway "<")
-        if text.is_some() {
-            let mut text_ok = text.unwrap().to_string();
+        if let Some(text) = text {
+            // TODO: html_unescape instead of xml_unescape
             if runaway.is_some() {
-                text_ok.push_str("<");
-            };
-            _process_text_node(&current, "text", &xml_unescape(&text_ok)); // TODO: html_unescape
+                _process_text_node(&current, "text", &xml_unescape(&(text.to_string() + "<")));
+            } else {
+                _process_text_node(&current, "text", &xml_unescape(text));
+            }
         }
 
         // Tag
-        if tag.is_some() {
-            let tag_ok = tag.unwrap();
-
+        if let Some(tag) = tag {
             // End: /tag
-            if tag_ok.starts_with("/") {
-                let tag_end = tag_ok.trim_left_matches('/').trim().to_lowercase();
-                current = _process_end_tag(&current, &tag_end);
+            if tag.starts_with("/") {
+                let end_tag = tag.trim_left_matches('/').trim().to_lowercase();
+                current = _process_end_tag(&current, &end_tag);
             }
             // Start: tag
             else {
-                let tag_plus_attrs: Vec<&str> = tag_ok.splitn(2, ' ').collect();
+                let tag_plus_attrs: Vec<&str> = tag.splitn(2, ' ').collect();
                 let mut start_tag: &str = tag_plus_attrs.get(0).unwrap();
                 let attrs_str = tag_plus_attrs.get(1);
 
                 // Attributes
                 let mut attrs: BTreeMap<String, Option<String>> = BTreeMap::new();
                 let mut is_closing = false;
-                if attrs_str.is_some() {
-                    for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str.unwrap()) {
+                if let Some(attrs_str) = attrs_str {
+                    for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str) {
                         let key = caps.at(1).unwrap().to_string().to_lowercase();
                         let value = if caps.at(2).is_some() { caps.at(2) } else if caps.at(3).is_some() { caps.at(3) } else { caps.at(4) };
 
@@ -337,7 +333,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
                         attrs.insert(key, match value {
                             Some(ref x) => Some(xml_unescape(x)), // TODO: html_unescape
-                            None => None,
+                            _ => None,
                         });
                     }
                 }
@@ -368,23 +364,23 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
         }
 
         // DOCTYPE
-        else if doctype.is_some() {
-            _process_text_node(&current, "doctype", doctype.unwrap());
+        else if let Some(doctype) = doctype {
+            _process_text_node(&current, "doctype", doctype);
         }
 
         // Comment
-        else if comment.is_some() {
-            _process_text_node(&current, "comment", comment.unwrap());
+        else if let Some(comment) = comment {
+            _process_text_node(&current, "comment", comment);
         }
 
         // CDATA
-        else if cdata.is_some() {
-            _process_text_node(&current, "cdata", cdata.unwrap());
+        else if let Some(cdata) = cdata {
+            _process_text_node(&current, "cdata", cdata);
         }
 
         // Processing instruction (? try to detect XML)
-        else if pi.is_some() {
-            _process_text_node(&current, "pi", pi.unwrap());
+        else if let Some(pi) = pi {
+            _process_text_node(&current, "pi", pi);
         }
     }
 
@@ -392,7 +388,6 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 }
 
 pub fn render (root: &Rc<TreeNode>) -> String {
-
     match root.elem {
         // Text (escaped)
         NodeElem::Text { ref elem_type, ref content } if elem_type == "text" => {
@@ -432,6 +427,7 @@ pub fn render (root: &Rc<TreeNode>) -> String {
         NodeElem::Tag { ref name, ref attrs, ref childs } => {
             let mut result = "<".to_string() + name;
 
+            // Attributes
             for (key, value) in attrs.iter() {
                 match *value {
                     Some(ref x) => { result = result + " " + key + "=\"" + &xml_escape(x) + "\"" },
@@ -441,7 +437,7 @@ pub fn render (root: &Rc<TreeNode>) -> String {
 
             // No children
             if childs.borrow().is_empty() {
-                return if EMPTY.contains(name.as_str()) { result + ">" } else { result + "></" + name + ">" };
+                return if EMPTY.contains(&name[..]) { result + ">" } else { result + "></" + name + ">" };
             }
 
             // Children

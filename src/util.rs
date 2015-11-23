@@ -1,6 +1,6 @@
 
-pub fn xml_escape(_text: &str) -> String {
-    let mut text = _text.to_string();
+pub fn xml_escape(text: &str) -> String {
+    let mut text = text.to_string();
     text = text.replace("&", "&amp;");
     text = text.replace("<", "&lt;");
     text = text.replace(">", "&gt;");
@@ -9,8 +9,8 @@ pub fn xml_escape(_text: &str) -> String {
     text
 }
 
-pub fn xml_unescape(_text: &str) -> String {
-    let mut text = _text.to_string();
+pub fn xml_unescape(text: &str) -> String {
+    let mut text = text.to_string();
     text = text.replace("&#39;", "'");
     text = text.replace("&quot;", "\"");
     text = text.replace("&lt;", "<");
