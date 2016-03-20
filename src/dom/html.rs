@@ -194,7 +194,7 @@ fn _process_text_node(current: &Rc<TreeNode>, elem_type: &str, content: &str) {
         TreeNode {
             id: Uuid::new_v4(),
             parent: Some(Rc::downgrade(current)),
-            elem: NodeElem::Text { elem_type: elem_type.to_string(), content: content.to_string() },
+            elem: NodeElem::Text { elem_type: elem_type.to_owned(), content: content.to_owned() },
         }
     );
 
@@ -236,7 +236,7 @@ fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &str, attrs: BTreeMap<S
         TreeNode {
             id: Uuid::new_v4(),
             parent: Some(Rc::downgrade(&working_node)),
-            elem: NodeElem::Tag { name: start_tag.to_string(), attrs: attrs, childs: RefCell::new(Vec::new()) },
+            elem: NodeElem::Tag { name: start_tag.to_owned(), attrs: attrs, childs: RefCell::new(Vec::new()) },
         }
     );
 
@@ -298,7 +298,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
         if let Some(text) = text {
             // TODO: html_unescape instead of xml_unescape
             if runaway.is_some() {
-                _process_text_node(&current, "text", &xml_unescape(&(text.to_string() + "<")));
+                _process_text_node(&current, "text", &xml_unescape(&(text.to_owned() + "<")));
             } else {
                 _process_text_node(&current, "text", &xml_unescape(text));
             }
@@ -322,7 +322,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                 let mut is_closing = false;
                 if let Some(attrs_str) = attrs_str {
                     for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str) {
-                        let key = caps.at(1).unwrap().to_string().to_lowercase();
+                        let key = caps.at(1).unwrap().to_owned().to_lowercase();
                         let value = if caps.at(2).is_some() { caps.at(2) } else if caps.at(3).is_some() { caps.at(3) } else { caps.at(4) };
 
                         // Empty tag
@@ -401,22 +401,22 @@ pub fn render (root: &Rc<TreeNode>) -> String {
 
         // DOCTYPE
         NodeElem::Text { ref elem_type, ref content } if elem_type == "doctype" => {
-            return "<!DOCTYPE".to_string() + content + ">"
+            return "<!DOCTYPE".to_owned() + content + ">"
         },
 
         // Comment
         NodeElem::Text { ref elem_type, ref content } if elem_type == "comment" => {
-            return "<!--".to_string() + content + "-->"
+            return "<!--".to_owned() + content + "-->"
         },
 
         // CDATA
         NodeElem::Text { ref elem_type, ref content } if elem_type == "cdata" => {
-            return "<![CDATA[".to_string() + content + "]]>"
+            return "<![CDATA[".to_owned() + content + "]]>"
         },
 
         // Processing instruction
         NodeElem::Text { ref elem_type, ref content } if elem_type == "pi" => {
-            return "<?".to_string() + content + "?>"
+            return "<?".to_owned() + content + "?>"
         },
 
         // Root
@@ -425,7 +425,7 @@ pub fn render (root: &Rc<TreeNode>) -> String {
         },
 
         NodeElem::Tag { ref name, ref attrs, ref childs } => {
-            let mut result = "<".to_string() + name;
+            let mut result = "<".to_owned() + name;
 
             // Attributes
             for (key, value) in attrs.iter() {
@@ -447,6 +447,6 @@ pub fn render (root: &Rc<TreeNode>) -> String {
                 "</" + name + ">";
         },
 
-        _ => { return "".to_string() },
+        _ => { return "".to_owned() },
     }
 }
