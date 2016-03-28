@@ -275,7 +275,7 @@ fn _unescape(_val: &str) -> String {
     val = val.replace("\\\n", "");
 
     // Unescape Unicode characters
-    let re = Regex::new(r"\\([0-9a-fA-F]{1,6})\s?").unwrap();
+    let re = regex!(r"\\([0-9a-fA-F]{1,6})\s?");
     val = re.replace_all(&val, |caps: &Captures| {
         let hex_char = caps.at(1).unwrap();
         format!("{}", char::from_u32(u32::from_str_radix(hex_char, 16).unwrap()).unwrap())
@@ -331,7 +331,7 @@ pub fn parse(css: &str) -> GroupOfSelectors {
     let mut css = css.trim();
 
     // Group separator re
-    let _separator_re = Regex::new(r"^\s*,\s*(.*)$").unwrap();
+    let _separator_re = regex!(r"^\s*,\s*(.*)$");
 
     let mut group: GroupOfSelectors = Vec::new();
     loop {
@@ -358,7 +358,7 @@ fn _parse_selectors(css: &str) -> (Selectors, &str) {
     let mut css = css;
 
     // Selector combinator re
-    let _combinator_re = Regex::new(r"^\s*([ >+~])\s*(.*)$").unwrap();
+    let _combinator_re = regex!(r"^\s*([ >+~])\s*(.*)$");
 
     let mut selectors: Selectors = Vec::new();
     loop {
@@ -467,13 +467,13 @@ fn _equation(equation_str: &str) -> (i32, i32) {
     if equation_str.trim().to_lowercase() == "odd" { return (2, 1); }
 
     // "4", "+4" or "-4"
-    if let Some(caps) = Regex::new(r"\s*((?:\+|-)?\d+)\s*").unwrap().captures(equation_str) {
+    if let Some(caps) = regex!(r"\s*((?:\+|-)?\d+)\s*").captures(equation_str) {
         let num = caps.at(1).unwrap().parse::<i32>().unwrap();
         return (0, num);
     }
 
     // "n", "4n", "+4n", "-4n", "n+1", "4n-1", "+4n-1" (and other variations)
-    if let Some(caps) = Regex::new(r"^\s*(?i:((?:\+|-)?(?:\d+)?)?n\s*((?:\+|-)\s*\d+)?)\s*$").unwrap().captures(equation_str) {
+    if let Some(caps) = regex!(r"^\s*(?i:((?:\+|-)?(?:\d+)?)?n\s*((?:\+|-)\s*\d+)?)\s*$").captures(equation_str) {
         let mut result = (0, 0);
         let num1 = caps.at(1).unwrap();
         result.0 = if num1 == "-" { -1 } else if num1.is_empty() { 1 } else { num1.parse::<i32>().unwrap() };
