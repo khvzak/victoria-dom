@@ -7,6 +7,7 @@ use std::rc::Weak;
 use std::cell::RefCell;
 
 use uuid::Uuid;
+use regex;
 use regex::Regex;
 
 use util::{xml_escape, xml_unescape};
@@ -44,7 +45,8 @@ lazy_static! {
             r")>" +
         r"|" +
             r"(<)" +                                                // Runaway "<"
-        r")?";
+        r")?" +
+        r"(.*)$";                                                   // Rest of html
 
     // HTML elements that only contain raw text
     static ref RAW: HashSet<&'static str> = hashset!["script", "style"];
@@ -274,6 +276,8 @@ fn _process_end_tag(current: &Rc<TreeNode>, end_tag: &str) -> Rc<TreeNode> {
 }
 
 pub fn parse(html: &str) -> Rc<TreeNode> {
+    let mut html = html;
+
     let root = Rc::new(
         TreeNode {
             id: Uuid::new_v4(),
@@ -285,7 +289,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
     let mut current = root.clone();
 
     let re = Regex::new(&*TOKEN_RE_STR).unwrap();
-    for caps in re.captures_iter(html) {
+    while let Some(caps) = re.captures(html) {
         let text = caps.at(1);
         let doctype = caps.at(2);
         let comment = caps.at(3);
@@ -293,6 +297,8 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
         let pi = caps.at(5);
         let tag = caps.at(6);
         let runaway = caps.at(11);
+
+        html = caps.at(12).unwrap_or(""); // html rest
 
         // Text (and runaway "<")
         if let Some(text) = text {
@@ -314,7 +320,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
             // Start: tag
             else {
                 let tag_plus_attrs: Vec<&str> = tag.splitn(2, ' ').collect();
-                let mut start_tag: &str = tag_plus_attrs.get(0).unwrap();
+                let mut start_tag: &str = &tag_plus_attrs.get(0).unwrap().to_lowercase();
                 let attrs_str = tag_plus_attrs.get(1);
 
                 // Attributes
@@ -341,7 +347,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                 // "image" is an alias for "img"
                 if start_tag == "image" { start_tag = "img" }
 
-                current = _process_start_tag(&current, &start_tag, attrs);
+                current = _process_start_tag(&current, start_tag, attrs);
 
                 // Element without end tag (self-closing)
                 if EMPTY.contains(start_tag) || (!BLOCK.contains(start_tag) && is_closing) {
@@ -349,17 +355,22 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                 }
 
                 // Raw text elements
-                if !RAW.contains(start_tag) && !RCDATA.contains(start_tag) {
-                    continue;
-                }
+                if RAW.contains(start_tag) || RCDATA.contains(start_tag) {
+                    let raw_text_re = Regex::new(&(r"(.+?)<\s*/\s*".to_owned() + &regex::quote(start_tag) + r"\s*>(.*)$")).unwrap();
+                    if let Some(raw_text_caps) = raw_text_re.captures(html) {
+                        let raw_text = raw_text_caps.at(1).unwrap();
+                        html = raw_text_caps.at(2).unwrap_or("");
 
-                if RCDATA.contains(start_tag) {
-                    _process_text_node(&current, "raw", &xml_unescape(start_tag))
-                } else {
-                    _process_text_node(&current, "raw", start_tag)
-                }
+                        if RCDATA.contains(start_tag) {
+                            // TODO: html_unescape
+                            _process_text_node(&current, "raw", &xml_unescape(raw_text))
+                        } else {
+                            _process_text_node(&current, "raw", raw_text)
+                        }
 
-                current = _process_end_tag(&current, start_tag);
+                        current = _process_end_tag(&current, start_tag);
+                    }
+                }
             }
         }
 
@@ -378,10 +389,12 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
             _process_text_node(&current, "cdata", cdata);
         }
 
-        // Processing instruction (? try to detect XML)
+        // Processing instruction
         else if let Some(pi) = pi {
             _process_text_node(&current, "pi", pi);
         }
+
+        if html.is_empty() { break; }
     }
 
     root
