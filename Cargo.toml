@@ -1,9 +1,11 @@
 [package]
 name = "dom_parser"
 version = "0.1.0"
-authors = ["orlenko"]
+authors = ["zxteam@gmail.com"]
+publish = false
 
 [dependencies]
 regex = "0.1"
 lazy_static = "0.1"
 uuid = "0.1"
+maplit = "0.1"

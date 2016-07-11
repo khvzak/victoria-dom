@@ -42,6 +42,7 @@ pub type Selectors = Vec<Rc<SelectorItem>>;
 pub type GroupOfSelectors = Vec<Rc<Selectors>>;
 
 pub fn matches(tree: &Rc<TreeNode>, css: &str) -> bool {
+    if css.is_empty() { return true; }
     match tree.elem {
         NodeElem::Tag { .. } => _match(&parse(css), tree, tree),
         _ => false
@@ -50,6 +51,7 @@ pub fn matches(tree: &Rc<TreeNode>, css: &str) -> bool {
 
 pub fn select(tree: &Rc<TreeNode>, css: &str, limit: usize) -> Vec<Rc<TreeNode>> {
     let group = parse(css);
+    //println!("{:?}", group);
 
     let mut result = Vec::new();
 
@@ -271,12 +273,15 @@ fn _siblings(current: &Rc<TreeNode>, _name: Option<&str>) -> Vec<Rc<TreeNode>> {
 fn _unescape(_val: &str) -> String {
     let mut val = _val.to_owned();
 
+    lazy_static! {
+        static ref _RE: Regex = Regex::new(r"\\([0-9a-fA-F]{1,6})\s?").unwrap();
+    }
+
     // Remove escaped newlines
     val = val.replace("\\\n", "");
 
     // Unescape Unicode characters
-    let re = regex!(r"\\([0-9a-fA-F]{1,6})\s?");
-    val = re.replace_all(&val, |caps: &Captures| {
+    val = _RE.replace_all(&val, |caps: &Captures| {
         let hex_char = caps.at(1).unwrap();
         format!("{}", char::from_u32(u32::from_str_radix(hex_char, 16).unwrap()).unwrap())
     });
@@ -293,7 +298,7 @@ fn _name_re_str(_val: &str) -> String {
 
 fn _value_re_str(op: &str, _val: Option<&str>, insensitive: bool) -> Option<String> {
     if _val.is_none() { return None };
-    let mut value = regex::quote(_val.unwrap());
+    let mut value = regex::quote(&_unescape(_val.unwrap()));
 
     if insensitive {
         value = "(?i)".to_owned() + &value;
@@ -331,7 +336,9 @@ pub fn parse(css: &str) -> GroupOfSelectors {
     let mut css = css.trim();
 
     // Group separator re
-    let _separator_re = regex!(r"^\s*,\s*(.*)$");
+    lazy_static! {
+        static ref _SEPARATOR_RE: Regex = Regex::new(r"^\s*,\s*(.*)$").unwrap();
+    }
 
     let mut group: GroupOfSelectors = Vec::new();
     loop {
@@ -344,7 +351,7 @@ pub fn parse(css: &str) -> GroupOfSelectors {
         }
 
         // Separator
-        if let Some(caps) = _separator_re.captures(css) {
+        if let Some(caps) = _SEPARATOR_RE.captures(css) {
             css = caps.at(1).unwrap();
         } else {
             break;
@@ -358,7 +365,9 @@ fn _parse_selectors(css: &str) -> (Selectors, &str) {
     let mut css = css;
 
     // Selector combinator re
-    let _combinator_re = regex!(r"^\s*([ >+~])\s*(.*)$");
+    lazy_static! {
+        static ref _COMBINATOR_RE: Regex = Regex::new(r"^\s*([ >+~])\s*(.*)$").unwrap();
+    }
 
     let mut selectors: Selectors = Vec::new();
     loop {
@@ -371,7 +380,7 @@ fn _parse_selectors(css: &str) -> (Selectors, &str) {
         }
 
         // Combinator
-        if let Some(caps) = _combinator_re.captures(css) {
+        if let Some(caps) = _COMBINATOR_RE.captures(css) {
             selectors.push(Rc::new(SelectorItem::Combinator { op: caps.at(1).unwrap().to_owned() }));
             css = caps.at(2).unwrap();
         } else {
@@ -385,15 +394,19 @@ fn _parse_selectors(css: &str) -> (Selectors, &str) {
 fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
     let mut css = css;
 
-    let _class_or_id_re = Regex::new(&(r"^([.#])((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
-    let _attributes_re = Regex::new(&(r"^".to_owned() + &*ATTR_RE_STR + r"(.*)$")).unwrap();
-    let _pseudo_class_re = Regex::new(&(r"^:([\w-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?".to_owned() + r"(.*)$")).unwrap();
-    let _tag_re = Regex::new(&(r"^((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
+    lazy_static! {
+        static ref _CLASS_OR_ID_RE: Regex = Regex::new(&(r"^([.#])((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
+        static ref _ATTRIBUTES_RE: Regex = Regex::new(&(r"^".to_owned() + &*ATTR_RE_STR + r"(.*)$")).unwrap();
+        static ref _PSEUDO_CLASS_RE: Regex = Regex::new(&(r"^:([\w-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?".to_owned() + r"(.*)$")).unwrap();
+        static ref _TAG_RE: Regex = Regex::new(&(r"^(?s)((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
+    }
 
     let mut conditions: Vec<ConditionItem> = Vec::new();
     loop {
+        //println!("\"{}\"", css);
+
         // Class or ID
-        if let Some(caps) = _class_or_id_re.captures(css) {
+        if let Some(caps) = _CLASS_OR_ID_RE.captures(css) {
             let prefix = caps.at(1).unwrap();
             let (name, op) = if prefix == "." { ("class", "~") } else { ("id", "") };
             let op_val = caps.at(2);
@@ -402,7 +415,7 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
         }
 
         // Attributes
-        else if let Some(caps) = _attributes_re.captures(css) {
+        else if let Some(caps) = _ATTRIBUTES_RE.captures(css) {
             let name = caps.at(1).unwrap();
             let op = caps.at(2).unwrap_or("");
             let op_val = caps.at(3).or(caps.at(4)).or(caps.at(5));
@@ -412,7 +425,7 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
         }
 
         // Pseudo-class
-        else if let Some(caps) = _pseudo_class_re.captures(css) {
+        else if let Some(caps) = _PSEUDO_CLASS_RE.captures(css) {
             let name = caps.at(1).unwrap().to_owned().to_lowercase();
             let args = caps.at(2).unwrap();
 
@@ -443,7 +456,7 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
         }
 
         // Tag
-        else if let Some(caps) = _tag_re.captures(css) {
+        else if let Some(caps) = _TAG_RE.captures(css) {
             let name = caps.at(1).unwrap();
             if name != "*" {
                 conditions.push(ConditionItem::Tag { name: _name_re_str(name) });
@@ -458,6 +471,11 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
 }
 
 fn _equation(equation_str: &str) -> (i32, i32) {
+    lazy_static! {
+        static ref _RE1: Regex = Regex::new(r"\s*((?:\+|-)?\d+)\s*").unwrap();
+        static ref _RE2: Regex = Regex::new(r"^\s*(?i:((?:\+|-)?(?:\d+)?)?n\s*((?:\+|-)\s*\d+)?)\s*$").unwrap();
+    }
+
     if equation_str.is_empty() { return (0, 0); }
 
     // "even"
@@ -467,13 +485,13 @@ fn _equation(equation_str: &str) -> (i32, i32) {
     if equation_str.trim().to_lowercase() == "odd" { return (2, 1); }
 
     // "4", "+4" or "-4"
-    if let Some(caps) = regex!(r"\s*((?:\+|-)?\d+)\s*").captures(equation_str) {
+    if let Some(caps) = _RE1.captures(equation_str) {
         let num = caps.at(1).unwrap().parse::<i32>().unwrap();
         return (0, num);
     }
 
     // "n", "4n", "+4n", "-4n", "n+1", "4n-1", "+4n-1" (and other variations)
-    if let Some(caps) = regex!(r"^\s*(?i:((?:\+|-)?(?:\d+)?)?n\s*((?:\+|-)\s*\d+)?)\s*$").captures(equation_str) {
+    if let Some(caps) = _RE2.captures(equation_str) {
         let mut result = (0, 0);
         let num1 = caps.at(1).unwrap();
         result.0 = if num1 == "-" { -1 } else if num1.is_empty() { 1 } else { num1.parse::<i32>().unwrap() };

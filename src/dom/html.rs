@@ -10,7 +10,7 @@ use uuid::Uuid;
 use regex;
 use regex::Regex;
 
-use util::{xml_escape, xml_unescape};
+use util::{xml_escape, html_unescape};
 
 lazy_static! {
     static ref ATTR_RE_STR: String = String::new() +
@@ -32,7 +32,7 @@ lazy_static! {
         r"(?:" +
             r"<(?:" +
                 r"!(?:" +
-                    r"DOCTYPE(?:\s+(.+?)\s*)" +                     // Doctype
+                    r"DOCTYPE(\s+\w+.*?)" +                         // Doctype
                 r"|" +
                     r"--(.*?)--\s*" +                               // Comment
                 r"|" +
@@ -152,6 +152,13 @@ pub enum NodeElem {
 }
 
 impl TreeNode {
+    pub fn is_tag(&self) -> bool {
+        match self.elem {
+            NodeElem::Tag { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn get_tag_name(&self) -> Option<&str> {
         match self.elem {
             NodeElem::Tag { ref name, .. } => Some(name),
@@ -302,11 +309,10 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
         // Text (and runaway "<")
         if let Some(text) = text {
-            // TODO: html_unescape instead of xml_unescape
             if runaway.is_some() {
-                _process_text_node(&current, "text", &xml_unescape(&(text.to_owned() + "<")));
+                _process_text_node(&current, "text", &html_unescape(&(text.to_owned() + "<")));
             } else {
-                _process_text_node(&current, "text", &xml_unescape(text));
+                _process_text_node(&current, "text", &html_unescape(text));
             }
         }
 
@@ -338,7 +344,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                         }
 
                         attrs.insert(key, match value {
-                            Some(ref x) => Some(xml_unescape(x)), // TODO: html_unescape
+                            Some(ref x) => Some(html_unescape(x)),
                             _ => None,
                         });
                     }
@@ -362,8 +368,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                         html = raw_text_caps.at(2).unwrap_or("");
 
                         if RCDATA.contains(start_tag) {
-                            // TODO: html_unescape
-                            _process_text_node(&current, "raw", &xml_unescape(raw_text))
+                            _process_text_node(&current, "raw", &html_unescape(raw_text))
                         } else {
                             _process_text_node(&current, "raw", raw_text)
                         }
