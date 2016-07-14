@@ -29,8 +29,8 @@ pub enum SelectorItem {
 
 #[derive(Debug)]
 pub enum ConditionItem {
-    Tag { name: String },
-    Attribute { name: String, value: Option<String> },
+    Tag { name: Regex },
+    Attribute { name: Regex, value: Option<Regex> },
     PseudoClass {
         class: String,
         group: Option<GroupOfSelectors>,
@@ -51,7 +51,6 @@ pub fn matches(tree: &Rc<TreeNode>, css: &str) -> bool {
 
 pub fn select(tree: &Rc<TreeNode>, css: &str, limit: usize) -> Vec<Rc<TreeNode>> {
     let group = parse(css);
-    //println!("{:?}", group);
 
     let mut result = Vec::new();
 
@@ -61,7 +60,7 @@ pub fn select(tree: &Rc<TreeNode>, css: &str, limit: usize) -> Vec<Rc<TreeNode>>
         if let NodeElem::Tag { .. } = current.elem {} else { continue; }
 
         queue = { let mut x = current.get_childs().unwrap(); x.append(&mut queue); x };
-        if _match(&group, &current, tree) { result.push(current); }
+        if (group.is_empty() && css == "*") || _match(&group, &current, tree) { result.push(current); }
 
         if limit > 0 && result.len() == limit { break; }
     }
@@ -75,32 +74,14 @@ pub fn select_one(tree: &Rc<TreeNode>, css: &str) -> Option<Rc<TreeNode>> {
 
 fn _match(group: &GroupOfSelectors, current: &Rc<TreeNode>, tree: &Rc<TreeNode>) -> bool {
     for _selectors in group {
-        let selectors = Rc::new(_selectors.iter().rev().map(|x| x.clone()).collect::<Selectors>());
-        //println!("[_match] selectors: {:?}", selectors);
-        if _combinator(&selectors, current, tree, 0) { /*println!("[_match] -> true");*/ return true; }
-        //println!("[_match] -> false");
+        let selectors = Rc::new(_selectors.iter().rev().cloned().collect::<Selectors>());
+        if _combinator(&selectors, current, tree, 0) { return true; }
     }
     return false;
 }
 
 fn _combinator(selectors: &Rc<Selectors>, current: &Rc<TreeNode>, tree: &Rc<TreeNode>, mut idx: usize) -> bool {
     if idx >= selectors.len() { return false; }
-
-    //let si = selectors[idx].clone();
-
-    //println!("[_combinator] si: {:?}; current: {}", si, current.dbg_string());
-
-    /*
-    if let SelectorItem::Conditions { ref items } = *si.clone() {
-        if !_match_selector_conditions(items, current) { return false; }
-
-        idx = idx + 1;
-        if idx >= selectors.len() { return true; }
-        si = selectors[idx].clone();
-    }
-    */
-
-    //println!("[_combinator] _match_selector_conditions -> true; next_si: {:?}", si);
 
     match *selectors[idx] {
         SelectorItem::Conditions { ref items } => {
@@ -118,8 +99,6 @@ fn _combinator(selectors: &Rc<Selectors>, current: &Rc<TreeNode>, tree: &Rc<Tree
             if op == ">" {
                 if current.parent.is_none() { return false; }
                 let parent = current.get_parent().unwrap();
-
-                //println!("[_combinator] op: \">\"; parent: {}", parent.dbg_string());
 
                 // no suitable parent
                 if let NodeElem::Root { .. } = parent.elem { return false; }
@@ -168,18 +147,17 @@ fn _match_selector_conditions(conditions: &Vec<ConditionItem>, current: &Rc<Tree
     'conditem: for ci in conditions {
         match ci {
             &ConditionItem::Tag { name: ref name_re } => {
-                if !Regex::new(name_re).unwrap().is_match(current.get_tag_name().unwrap()) { return false; }
+                if !name_re.is_match(current.get_tag_name().unwrap()) { return false; }
             },
 
             &ConditionItem::Attribute { name: ref name_re, value: ref value_re } => {
                 let attrs = current.get_tag_attrs().unwrap();
+                let value_re = value_re.as_ref();
 
                 for (name, value) in attrs.iter() {
-                    if
-                        Regex::new(name_re).unwrap().is_match(name) && (
-                            value.is_none() || value_re.is_none() ||
-                            Regex::new(value_re.as_ref().unwrap()).unwrap().is_match(value.as_ref().unwrap())
-                    ) {
+                    let value = value.as_ref();
+
+                    if name_re.is_match(name) && (value.is_none() || value_re.is_none() || value_re.unwrap().is_match(value.unwrap())) {
                         continue 'conditem; // go to a next condition item
                     }
                 }
@@ -194,33 +172,37 @@ fn _match_selector_conditions(conditions: &Vec<ConditionItem>, current: &Rc<Tree
                         _ => false,
                     };
 
-                    return current.get_childs().unwrap().iter().filter(|&x| !_is_empty(x)).count() == 0;
+                    let _matched = current.get_childs().unwrap().iter().filter(|&x| !_is_empty(x)).count() == 0;
+                    if _matched { continue 'conditem; }
                 }
 
                 // ":root"
-                if class == "root" {
+                else if class == "root" {
                     let parent = current.get_parent();
-                    return parent.is_some() && match parent.unwrap().elem {
+                    let _matched = parent.is_some() && match parent.unwrap().elem {
                         NodeElem::Root { .. } => true,
                         _ => false
                     };
+                    if _matched { continue 'conditem; }
                 }
 
                 // ":not"
-                if class == "not" {
-                    return !_match(&group.clone().unwrap(), current, current);
+                else if class == "not" {
+                    let _matched = !_match(&group.clone().unwrap(), current, current);
+                    if _matched { continue 'conditem; }
                 }
 
                 // ":checked"
-                if class == "checked" {
-                    return match current.elem {
+                else if class == "checked" {
+                    let _matched = match current.elem {
                         NodeElem::Tag { ref attrs, .. } => attrs.contains_key("checked") || attrs.contains_key("selected"),
                         _ => false
                     };
+                    if _matched { continue 'conditem; }
                 }
 
                 // ":nth-child", ":nth-last-child", ":nth-of-type" or ":nth-last-of-type"
-                if let Some(equation) = *equation {
+                else if let Some(equation) = *equation {
                     let mut siblings = if class.ends_with("of-type") {
                         _siblings(current, Some(current.get_tag_name().unwrap()))
                     } else {
@@ -229,18 +211,18 @@ fn _match_selector_conditions(conditions: &Vec<ConditionItem>, current: &Rc<Tree
 
                     if class.starts_with("nth-last") { siblings.reverse() }
 
-                    for i in 0..(siblings.len()-1) {
+                    for i in 0..siblings.len() {
                         let result = equation.0 * (i as i32) + equation.1;
 
                         if result < 1 { continue; }
                         if (result - 1) as usize >= siblings.len() { break; }
 
-                        if siblings[(result - 1) as usize].id == current.id { return true; }
+                        if siblings[(result - 1) as usize].id == current.id { continue 'conditem; }
                     }
                 }
 
                 // ":only-child" or ":only-of-type"
-                if class == "only-child" || class == "only-of-type" {
+                else if class == "only-child" || class == "only-of-type" {
                     let siblings = if class == "only-of-type" {
                         _siblings(current, Some(current.get_tag_name().unwrap()))
                     } else {
@@ -249,7 +231,8 @@ fn _match_selector_conditions(conditions: &Vec<ConditionItem>, current: &Rc<Tree
                     for sibling in siblings {
                         if sibling.id != current.id { return false; }
                     }
-                    return true;
+
+                    continue 'conditem;
                 }
 
                 return false;
@@ -267,7 +250,7 @@ fn _siblings(current: &Rc<TreeNode>, _name: Option<&str>) -> Vec<Rc<TreeNode>> {
     childs.iter().filter(|&x| match x.elem {
         NodeElem::Tag { ref name, .. } => if _name.is_some() { name == _name.unwrap() } else { true },
         _ => false
-    }).map(|x| x.clone()).collect()
+    }).cloned().collect()
 }
 
 fn _unescape(_val: &str) -> String {
@@ -292,11 +275,11 @@ fn _unescape(_val: &str) -> String {
     val
 }
 
-fn _name_re_str(_val: &str) -> String {
-    r"(?:^|:)".to_owned() + &regex::quote(&_unescape(_val)) + "$"
+fn _name_re(_val: &str) -> Regex {
+    Regex::new(&(r"(?:^|:)".to_owned() + &regex::quote(&_unescape(_val)) + "$")).unwrap()
 }
 
-fn _value_re_str(op: &str, _val: Option<&str>, insensitive: bool) -> Option<String> {
+fn _value_re(op: &str, _val: Option<&str>, insensitive: bool) -> Option<Regex> {
     if _val.is_none() { return None };
     let mut value = regex::quote(&_unescape(_val.unwrap()));
 
@@ -304,7 +287,7 @@ fn _value_re_str(op: &str, _val: Option<&str>, insensitive: bool) -> Option<Stri
         value = "(?i)".to_owned() + &value;
     }
 
-    Some(
+    Some(Regex::new(&(
         // "~=" (word)
         if op == "~" {
             r"(?:^|\s+)".to_owned() + &value + r"(?:\s+|$)"
@@ -329,7 +312,7 @@ fn _value_re_str(op: &str, _val: Option<&str>, insensitive: bool) -> Option<Stri
         else {
             r"^".to_owned() + &value + "$"
         }
-    )
+    )).unwrap())
 }
 
 pub fn parse(css: &str) -> GroupOfSelectors {
@@ -337,7 +320,7 @@ pub fn parse(css: &str) -> GroupOfSelectors {
 
     // Group separator re
     lazy_static! {
-        static ref _SEPARATOR_RE: Regex = Regex::new(r"^\s*,\s*(.*)$").unwrap();
+        static ref _SEPARATOR_RE: Regex = Regex::new(r"^(?s)\s*,\s*(.*)$").unwrap();
     }
 
     let mut group: GroupOfSelectors = Vec::new();
@@ -366,7 +349,7 @@ fn _parse_selectors(css: &str) -> (Selectors, &str) {
 
     // Selector combinator re
     lazy_static! {
-        static ref _COMBINATOR_RE: Regex = Regex::new(r"^\s*([ >+~])\s*(.*)$").unwrap();
+        static ref _COMBINATOR_RE: Regex = Regex::new(r"^(?s)\s*([ >+~])\s*(.*)$").unwrap();
     }
 
     let mut selectors: Selectors = Vec::new();
@@ -395,22 +378,20 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
     let mut css = css;
 
     lazy_static! {
-        static ref _CLASS_OR_ID_RE: Regex = Regex::new(&(r"^([.#])((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
-        static ref _ATTRIBUTES_RE: Regex = Regex::new(&(r"^".to_owned() + &*ATTR_RE_STR + r"(.*)$")).unwrap();
-        static ref _PSEUDO_CLASS_RE: Regex = Regex::new(&(r"^:([\w-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?".to_owned() + r"(.*)$")).unwrap();
+        static ref _CLASS_OR_ID_RE: Regex = Regex::new(&(r"^(?s)([.#])((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
+        static ref _ATTRIBUTES_RE: Regex = Regex::new(&(r"^(?s)".to_owned() + &*ATTR_RE_STR + r"(.*)$")).unwrap();
+        static ref _PSEUDO_CLASS_RE: Regex = Regex::new(&(r"^(?s):([\w-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?".to_owned() + r"(.*)$")).unwrap();
         static ref _TAG_RE: Regex = Regex::new(&(r"^(?s)((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
     }
 
     let mut conditions: Vec<ConditionItem> = Vec::new();
     loop {
-        //println!("\"{}\"", css);
-
         // Class or ID
         if let Some(caps) = _CLASS_OR_ID_RE.captures(css) {
             let prefix = caps.at(1).unwrap();
             let (name, op) = if prefix == "." { ("class", "~") } else { ("id", "") };
             let op_val = caps.at(2);
-            conditions.push(ConditionItem::Attribute { name: _name_re_str(name), value: _value_re_str(op, op_val, false) });
+            conditions.push(ConditionItem::Attribute { name: _name_re(name), value: _value_re(op, op_val, false) });
             css = caps.at(3).unwrap_or("");
         }
 
@@ -420,22 +401,22 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
             let op = caps.at(2).unwrap_or("");
             let op_val = caps.at(3).or(caps.at(4)).or(caps.at(5));
             let op_insensitive = caps.at(6).is_some();
-            conditions.push(ConditionItem::Attribute { name: _name_re_str(name), value: _value_re_str(op, op_val, op_insensitive) });
+            conditions.push(ConditionItem::Attribute { name: _name_re(name), value: _value_re(op, op_val, op_insensitive) });
             css = caps.at(7).unwrap_or("");
         }
 
         // Pseudo-class
         else if let Some(caps) = _PSEUDO_CLASS_RE.captures(css) {
             let name = caps.at(1).unwrap().to_owned().to_lowercase();
-            let args = caps.at(2).unwrap();
+            let args = caps.at(2);
 
             // ":not" (contains more selectors)
             if name == "not" {
-                conditions.push(ConditionItem::PseudoClass { class: name, group: Some(parse(args)), equation: None });
+                conditions.push(ConditionItem::PseudoClass { class: name, group: args.map(parse), equation: None });
             }
             // ":nth-*" (with An+B notation)
             else if name.starts_with("nth-") {
-                conditions.push(ConditionItem::PseudoClass { class: name, group: None, equation: Some(_equation(args)) });
+                conditions.push(ConditionItem::PseudoClass { class: name, group: None, equation: args.map(_equation) });
             }
             // ":first-*" (rewrite to ":nth-*")
             else if name.starts_with("first-") {
@@ -459,7 +440,7 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
         else if let Some(caps) = _TAG_RE.captures(css) {
             let name = caps.at(1).unwrap();
             if name != "*" {
-                conditions.push(ConditionItem::Tag { name: _name_re_str(name) });
+                conditions.push(ConditionItem::Tag { name: _name_re(name) });
             }
             css = caps.at(2).unwrap_or("");
         }
@@ -472,8 +453,8 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
 
 fn _equation(equation_str: &str) -> (i32, i32) {
     lazy_static! {
-        static ref _RE1: Regex = Regex::new(r"\s*((?:\+|-)?\d+)\s*").unwrap();
-        static ref _RE2: Regex = Regex::new(r"^\s*(?i:((?:\+|-)?(?:\d+)?)?n\s*((?:\+|-)\s*\d+)?)\s*$").unwrap();
+        static ref _RE1: Regex = Regex::new(r"^\s*((?:\+|-)?\d+)\s*$").unwrap();
+        static ref _RE2: Regex = Regex::new(r"^(?i)\s*((?:\+|-)?(?:\d+)?)?n\s*((?:\+|-)\s*\d+)?\s*$").unwrap();
     }
 
     if equation_str.is_empty() { return (0, 0); }
@@ -498,6 +479,7 @@ fn _equation(equation_str: &str) -> (i32, i32) {
         if let Some(num2) = caps.at(2) {
             result.1 = num2.split_whitespace().collect::<Vec<&str>>().concat().parse::<i32>().unwrap();
         }
+        return result;
     }
 
     return (0, 0);

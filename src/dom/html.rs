@@ -182,8 +182,8 @@ impl TreeNode {
 
     pub fn get_childs(&self) -> Option<Vec<Rc<TreeNode>>> {
         match self.elem {
-            NodeElem::Root { ref childs } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
-            NodeElem::Tag { ref childs, .. } => Some(childs.borrow().iter().map(|x| x.clone()).collect()),
+            NodeElem::Root { ref childs } => Some(childs.borrow().clone()),
+            NodeElem::Tag { ref childs, .. } => Some(childs.borrow().clone()),
             _ => None,
         }
     }
@@ -295,6 +295,10 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
     let mut current = root.clone();
 
+    lazy_static! {
+        static ref _TAG_PLUS_ATTRS_RE: Regex = Regex::new(r"^([^\s/]+)([\s\S]*)").unwrap();
+    }
+
     let re = Regex::new(&*TOKEN_RE_STR).unwrap();
     while let Some(caps) = re.captures(html) {
         let text = caps.at(1);
@@ -325,55 +329,53 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
             }
             // Start: tag
             else {
-                let tag_plus_attrs: Vec<&str> = tag.splitn(2, ' ').collect();
-                let mut start_tag: &str = &tag_plus_attrs.get(0).unwrap().to_lowercase();
-                let attrs_str = tag_plus_attrs.get(1);
+                let caps = _TAG_PLUS_ATTRS_RE.captures(tag).unwrap(); // panic is ok
+                let mut start_tag = caps.at(1).unwrap().to_lowercase();
+                let attrs_str = caps.at(2).unwrap();
 
                 // Attributes
                 let mut attrs: BTreeMap<String, Option<String>> = BTreeMap::new();
                 let mut is_closing = false;
-                if let Some(attrs_str) = attrs_str {
-                    for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str) {
-                        let key = caps.at(1).unwrap().to_owned().to_lowercase();
-                        let value = if caps.at(2).is_some() { caps.at(2) } else if caps.at(3).is_some() { caps.at(3) } else { caps.at(4) };
+                for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str) {
+                    let key = caps.at(1).unwrap().to_owned().to_lowercase();
+                    let value = if caps.at(2).is_some() { caps.at(2) } else if caps.at(3).is_some() { caps.at(3) } else { caps.at(4) };
 
-                        // Empty tag
-                        if key == "/" {
-                            is_closing = true;
-                            continue;
-                        }
-
-                        attrs.insert(key, match value {
-                            Some(ref x) => Some(html_unescape(x)),
-                            _ => None,
-                        });
+                    // Empty tag
+                    if key == "/" {
+                        is_closing = true;
+                        continue;
                     }
+
+                    attrs.insert(key, match value {
+                        Some(ref x) => Some(html_unescape(x)),
+                        _ => None,
+                    });
                 }
 
                 // "image" is an alias for "img"
-                if start_tag == "image" { start_tag = "img" }
+                if start_tag == "image" { start_tag = "img".to_owned() }
 
-                current = _process_start_tag(&current, start_tag, attrs);
+                current = _process_start_tag(&current, &start_tag, attrs);
 
                 // Element without end tag (self-closing)
-                if EMPTY.contains(start_tag) || (!BLOCK.contains(start_tag) && is_closing) {
-                    current = _process_end_tag(&current, start_tag);
+                if EMPTY.contains(start_tag.as_str()) || (!BLOCK.contains(start_tag.as_str()) && is_closing) {
+                    current = _process_end_tag(&current, &start_tag);
                 }
 
                 // Raw text elements
-                if RAW.contains(start_tag) || RCDATA.contains(start_tag) {
-                    let raw_text_re = Regex::new(&(r"(.+?)<\s*/\s*".to_owned() + &regex::quote(start_tag) + r"\s*>(.*)$")).unwrap();
+                if RAW.contains(start_tag.as_str()) || RCDATA.contains(start_tag.as_str()) {
+                    let raw_text_re = Regex::new(&(r"(.+?)<\s*/\s*".to_owned() + &regex::quote(&start_tag) + r"\s*>(.*)$")).unwrap();
                     if let Some(raw_text_caps) = raw_text_re.captures(html) {
                         let raw_text = raw_text_caps.at(1).unwrap();
                         html = raw_text_caps.at(2).unwrap_or("");
 
-                        if RCDATA.contains(start_tag) {
+                        if RCDATA.contains(&start_tag.as_str()) {
                             _process_text_node(&current, "raw", &html_unescape(raw_text))
                         } else {
                             _process_text_node(&current, "raw", raw_text)
                         }
 
-                        current = _process_end_tag(&current, start_tag);
+                        current = _process_end_tag(&current, &start_tag);
                     }
                 }
             }
