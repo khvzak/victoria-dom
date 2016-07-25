@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-
-use std::char;
-use std::u32;
+use std::{char, u32};
 
 use regex::{Regex, Captures};
 

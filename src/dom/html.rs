@@ -1,14 +1,9 @@
-use std::collections::HashSet;
-use std::collections::HashMap;
-use std::collections::BTreeMap;
-
-use std::rc::Rc;
-use std::rc::Weak;
+use std::collections::{HashSet, HashMap, BTreeMap};
+use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 
 use uuid::Uuid;
-use regex;
-use regex::Regex;
+use regex::{self, Regex};
 
 use util::{xml_escape, html_unescape};
 
@@ -188,14 +183,14 @@ impl TreeNode {
         }
     }
 
-    pub fn dbg_string(&self) -> String {
-        let id = self.id;
-        match self.elem {
-            NodeElem::Root { .. } => format!("[{}] TreeNode:Root", id),
-            NodeElem::Tag { ref name, ref attrs, .. } => format!("[{}] TreeNode:Tag(name: {}, attrs: {:?})", id, name, attrs),
-            NodeElem::Text { ref elem_type, ref content } => format!("[{}] TreeNode:Text(type: {}, content: {})", id, elem_type, content),
-        }
-    }
+    // pub fn dbg_string(&self) -> String {
+    //     let id = self.id;
+    //     match self.elem {
+    //         NodeElem::Root { .. } => format!("[{}] TreeNode:Root", id),
+    //         NodeElem::Tag { ref name, ref attrs, .. } => format!("[{}] TreeNode:Tag(name: {}, attrs: {:?})", id, name, attrs),
+    //         NodeElem::Text { ref elem_type, ref content } => format!("[{}] TreeNode:Text(type: {}, content: {})", id, elem_type, content),
+    //     }
+    // }
 }
 
 fn _process_text_node(current: &Rc<TreeNode>, elem_type: &str, content: &str) {

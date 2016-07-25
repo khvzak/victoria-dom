@@ -1,5 +1,5 @@
-pub mod css;
-pub mod html;
+mod css;
+mod html;
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -7,8 +7,6 @@ use std::rc::Rc;
 use regex::Regex;
 
 use self::html::TreeNode;
-
-// base 6.56
 
 pub struct DOM {
     tree: Rc<TreeNode>,

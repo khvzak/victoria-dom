@@ -1,9 +1,7 @@
 use std::rc::Rc;
+use std::{char, u32};
 
-use std::char;
-
-use regex;
-use regex::{Regex, Captures};
+use regex::{self, Regex, Captures};
 
 use dom::html::{TreeNode, NodeElem};
 

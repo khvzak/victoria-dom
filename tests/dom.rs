@@ -1,6 +1,6 @@
-extern crate dom_parser;
+extern crate victoria_dom;
 
-use dom_parser::dom::DOM;
+use victoria_dom::DOM;
 
 #[test]
 fn empty_vals() {
