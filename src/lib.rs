@@ -21,6 +21,7 @@
 //!     let html = r#"<html><div id="main">Hello, <a href="http://rust-lang.org" alt="The Rust Programing Language">Rust</a></div></html>"#;
 //!     let dom = DOM::new(html);
 //!
+//!     assert_eq!(dom.at("html").unwrap().text_all(), "Hello, Rust");
 //!     assert_eq!(dom.at("div#main > a").unwrap().attr("alt").unwrap(), "The Rust Programing Language");
 //! }
 //! ```
