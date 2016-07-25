@@ -108,7 +108,7 @@ lazy_static! {
         "a", "abbr", "area", "audio", "b", "bdi", "bdo", "br", "button", "canvas", "cite", "code", "data",
         "datalist", "del", "dfn", "em", "embed", "i", "iframe", "img", "input", "ins", "kbd", "keygen",
         "label", "link", "map", "mark", "math", "meta", "meter", "noscript", "object", "output", "picture",
-        "progress", "q", "ruby", "s", "samp", "script", "select", "small", "span", "strong", "sub", "sup",
+        "progress", "q", "ruby", "s", "samp", "script", "select", "slot", "small", "span", "strong", "sub", "sup",
         "svg", "template", "textarea", "time", "u", "var", "video", "wbr",
         "acronym", "applet", "basefont", "big", "font", "strike", "tt" // Obsolete
     ];
