@@ -376,10 +376,10 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
     let mut css = css;
 
     lazy_static! {
-        static ref _CLASS_OR_ID_RE: Regex = Regex::new(&(r"^(?s)([.#])((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
+        static ref _CLASS_OR_ID_RE: Regex = Regex::new(&(r"^(?s)([.#])((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:\[ >~+])+)" + r"(.*)$")).unwrap();
         static ref _ATTRIBUTES_RE: Regex = Regex::new(&(r"^(?s)".to_owned() + &*ATTR_RE_STR + r"(.*)$")).unwrap();
         static ref _PSEUDO_CLASS_RE: Regex = Regex::new(&(r"^(?s):([\w-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?".to_owned() + r"(.*)$")).unwrap();
-        static ref _TAG_RE: Regex = Regex::new(&(r"^(?s)((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:[ >~+])+)" + r"(.*)$")).unwrap();
+        static ref _TAG_RE: Regex = Regex::new(&(r"^(?s)((?:".to_owned() + &*ESCAPE_RE_STR + r"\s|\\.|[^,.#:\[ >~+])+)" + r"(.*)$")).unwrap();
     }
 
     let mut conditions: Vec<ConditionItem> = Vec::new();
