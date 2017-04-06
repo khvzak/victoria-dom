@@ -250,7 +250,7 @@ fn _nodes_text(nodes: &Vec<Rc<TreeNode>>, recursive: bool, trim: bool) -> String
         let mut chunk = match node.elem {
             html::NodeElem::Text { ref elem_type, ref content } => {
                 match elem_type.as_ref() {
-                    "text" if trim => _RE1.replace_all(content.trim(), " "),
+                    "text" if trim => _RE1.replace_all(content.trim(), " ").into_owned(),
                     "text" | "raw" | "cdata" => content.to_owned(),
                     _ => String::new(),
                 }

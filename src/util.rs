@@ -29,8 +29,8 @@ pub fn html_unescape(text: &str) -> String {
     }
 
     _RE.replace_all(text, |caps: &Captures| {
-        caps.at(1).map(|x| _decode_point(x)).unwrap_or_else(|| _decode_name(caps.at(2).unwrap()))
-    })
+        caps.get(1).map(|x| _decode_point(x.as_str())).unwrap_or_else(|| _decode_name(caps.get(2).unwrap().as_str()))
+    }).into_owned()
 }
 
 fn _decode_point(point: &str) -> String {

@@ -263,9 +263,9 @@ fn _unescape(_val: &str) -> String {
 
     // Unescape Unicode characters
     val = _RE.replace_all(&val, |caps: &Captures| {
-        let hex_char = caps.at(1).unwrap();
-        format!("{}", char::from_u32(u32::from_str_radix(hex_char, 16).unwrap()).unwrap())
-    });
+        let hex_char = caps.get(1).unwrap().as_str();
+        format!("{}", char::from_u32(u32::from_str_radix(hex_char, 16).unwrap()).unwrap()).to_owned()
+    }).into_owned();
 
     // Remove backslash
     val = val.replace(r"\", "");
@@ -274,15 +274,15 @@ fn _unescape(_val: &str) -> String {
 }
 
 fn _name_re(_val: &str) -> Regex {
-    Regex::new(&(r"(?:^|:)".to_owned() + &regex::quote(&_unescape(_val)) + "$")).unwrap()
+    Regex::new(&(r"(?:^|:)".to_owned() + &regex::escape(&_unescape(_val)) + "$")).unwrap()
 }
 
 fn _value_re(op: &str, _val: Option<&str>, insensitive: bool) -> Option<Regex> {
     if _val.is_none() { return None };
-    let mut value = regex::quote(&_unescape(_val.unwrap()));
+    let mut value = regex::escape(&_unescape(_val.unwrap()));
 
     if insensitive {
-        value = "(?i)".to_owned() + &value;
+        value = "(?i)".to_owned() + &value.to_owned();
     }
 
     Some(Regex::new(&(
@@ -333,7 +333,7 @@ pub fn parse(css: &str) -> GroupOfSelectors {
 
         // Separator
         if let Some(caps) = _SEPARATOR_RE.captures(css) {
-            css = caps.at(1).unwrap();
+            css = caps.get(1).unwrap().as_str();
         } else {
             break;
         }
@@ -362,8 +362,8 @@ fn _parse_selectors(css: &str) -> (Selectors, &str) {
 
         // Combinator
         if let Some(caps) = _COMBINATOR_RE.captures(css) {
-            selectors.push(Rc::new(SelectorItem::Combinator { op: caps.at(1).unwrap().to_owned() }));
-            css = caps.at(2).unwrap();
+            selectors.push(Rc::new(SelectorItem::Combinator { op: caps.get(1).unwrap().as_str().to_owned() }));
+            css = caps.get(2).unwrap().as_str();
         } else {
             break;
         }
@@ -386,27 +386,27 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
     loop {
         // Class or ID
         if let Some(caps) = _CLASS_OR_ID_RE.captures(css) {
-            let prefix = caps.at(1).unwrap();
+            let prefix = caps.get(1).unwrap().as_str();
             let (name, op) = if prefix == "." { ("class", "~") } else { ("id", "") };
-            let op_val = caps.at(2);
+            let op_val = caps.get(2).map(|c| c.as_str());
             conditions.push(ConditionItem::Attribute { name: _name_re(name), value: _value_re(op, op_val, false) });
-            css = caps.at(3).unwrap_or("");
+            css = caps.get(3).map(|c| c.as_str()).unwrap_or("");
         }
 
         // Attributes
         else if let Some(caps) = _ATTRIBUTES_RE.captures(css) {
-            let name = caps.at(1).unwrap();
-            let op = caps.at(2).unwrap_or("");
-            let op_val = caps.at(3).or(caps.at(4)).or(caps.at(5));
-            let op_insensitive = caps.at(6).is_some();
+            let name = caps.get(1).unwrap().as_str();
+            let op = caps.get(2).map(|c| c.as_str()).unwrap_or("");
+            let op_val = caps.get(3).or(caps.get(4)).or(caps.get(5)).map(|c| c.as_str());
+            let op_insensitive = caps.get(6).is_some();
             conditions.push(ConditionItem::Attribute { name: _name_re(name), value: _value_re(op, op_val, op_insensitive) });
-            css = caps.at(7).unwrap_or("");
+            css = caps.get(7).map(|c| c.as_str()).unwrap_or("");
         }
 
         // Pseudo-class
         else if let Some(caps) = _PSEUDO_CLASS_RE.captures(css) {
-            let name = caps.at(1).unwrap().to_owned().to_lowercase();
-            let args = caps.at(2);
+            let name = caps.get(1).unwrap().as_str().to_owned().to_lowercase();
+            let args = caps.get(2).map(|c| c.as_str());
 
             // ":not" (contains more selectors)
             if name == "not" {
@@ -431,16 +431,16 @@ fn _parse_selector_conditions(css: &str) -> (Vec<ConditionItem>, &str) {
                 conditions.push(ConditionItem::PseudoClass { class: name, group: None, equation: None });
             }
 
-            css = caps.at(3).unwrap_or("");
+            css = caps.get(3).map(|c| c.as_str()).unwrap_or("");
         }
 
         // Tag
         else if let Some(caps) = _TAG_RE.captures(css) {
-            let name = caps.at(1).unwrap();
+            let name = caps.get(1).unwrap().as_str();
             if name != "*" {
                 conditions.push(ConditionItem::Tag { name: _name_re(name) });
             }
-            css = caps.at(2).unwrap_or("");
+            css = caps.get(2).map(|c| c.as_str()).unwrap_or("");
         }
 
         else { break; }
@@ -465,17 +465,17 @@ fn _equation(equation_str: &str) -> (i32, i32) {
 
     // "4", "+4" or "-4"
     if let Some(caps) = _RE1.captures(equation_str) {
-        let num = caps.at(1).unwrap().parse::<i32>().unwrap();
+        let num = caps.get(1).unwrap().as_str().parse::<i32>().unwrap();
         return (0, num);
     }
 
     // "n", "4n", "+4n", "-4n", "n+1", "4n-1", "+4n-1" (and other variations)
     if let Some(caps) = _RE2.captures(equation_str) {
         let mut result = (0, 0);
-        let num1 = caps.at(1).unwrap();
+        let num1 = caps.get(1).unwrap().as_str();
         result.0 = if num1 == "-" { -1 } else if num1.is_empty() { 1 } else { num1.parse::<i32>().unwrap() };
-        if let Some(num2) = caps.at(2) {
-            result.1 = num2.split_whitespace().collect::<Vec<&str>>().concat().parse::<i32>().unwrap();
+        if let Some(num2) = caps.get(2) {
+            result.1 = num2.as_str().split_whitespace().collect::<Vec<&str>>().concat().parse::<i32>().unwrap();
         }
         return result;
     }

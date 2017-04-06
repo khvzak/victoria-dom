@@ -296,44 +296,44 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
     let re = Regex::new(&*TOKEN_RE_STR).unwrap();
     while let Some(caps) = re.captures(html) {
-        let text = caps.at(1);
-        let doctype = caps.at(2);
-        let comment = caps.at(3);
-        let cdata = caps.at(4);
-        let pi = caps.at(5);
-        let tag = caps.at(6);
-        let runaway = caps.at(11);
+        let text = caps.get(1);
+        let doctype = caps.get(2);
+        let comment = caps.get(3);
+        let cdata = caps.get(4);
+        let pi = caps.get(5);
+        let tag = caps.get(6);
+        let runaway = caps.get(11);
 
-        html = caps.at(12).unwrap_or(""); // html rest
+        html = caps.get(12).map(|c| c.as_str()).unwrap_or(""); // html rest
 
         // Text (and runaway "<")
         if let Some(text) = text {
             if runaway.is_some() {
-                _process_text_node(&current, "text", &html_unescape(&(text.to_owned() + "<")));
+                _process_text_node(&current, "text", &html_unescape(&(text.as_str().to_owned() + "<")));
             } else {
-                _process_text_node(&current, "text", &html_unescape(text));
+                _process_text_node(&current, "text", &html_unescape(text.as_str()));
             }
         }
 
         // Tag
         if let Some(tag) = tag {
             // End: /tag
-            if tag.starts_with("/") {
-                let end_tag = tag.trim_left_matches('/').trim().to_lowercase();
+            if tag.as_str().starts_with("/") {
+                let end_tag = tag.as_str().trim_left_matches('/').trim().to_lowercase();
                 current = _process_end_tag(&current, &end_tag);
             }
             // Start: tag
             else {
-                let caps = _TAG_PLUS_ATTRS_RE.captures(tag).unwrap(); // panic is ok
-                let mut start_tag = caps.at(1).unwrap().to_lowercase();
-                let attrs_str = caps.at(2).unwrap();
+                let caps = _TAG_PLUS_ATTRS_RE.captures(tag.as_str()).unwrap(); // panic is ok
+                let mut start_tag = caps.get(1).unwrap().as_str().to_lowercase();
+                let attrs_str = caps.get(2).unwrap();
 
                 // Attributes
                 let mut attrs: BTreeMap<String, Option<String>> = BTreeMap::new();
                 let mut is_closing = false;
-                for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str) {
-                    let key = caps.at(1).unwrap().to_owned().to_lowercase();
-                    let value = if caps.at(2).is_some() { caps.at(2) } else if caps.at(3).is_some() { caps.at(3) } else { caps.at(4) };
+                for caps in Regex::new(&*ATTR_RE_STR).unwrap().captures_iter(attrs_str.as_str()) {
+                    let key = caps.get(1).unwrap().as_str().to_owned().to_lowercase();
+                    let value = if caps.get(2).is_some() { caps.get(2) } else if caps.get(3).is_some() { caps.get(3) } else { caps.get(4) };
 
                     // Empty tag
                     if key == "/" {
@@ -342,7 +342,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                     }
 
                     attrs.insert(key, match value {
-                        Some(ref x) => Some(html_unescape(x)),
+                        Some(ref x) => Some(html_unescape(x.as_str())),
                         _ => None,
                     });
                 }
@@ -359,15 +359,15 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
                 // Raw text elements
                 if RAW.contains(start_tag.as_str()) || RCDATA.contains(start_tag.as_str()) {
-                    let raw_text_re = Regex::new(&(r"(.+?)<\s*/\s*".to_owned() + &regex::quote(&start_tag) + r"\s*>(.*)$")).unwrap();
+                    let raw_text_re = Regex::new(&(r"(.+?)<\s*/\s*".to_owned() + &regex::escape(&start_tag) + r"\s*>(.*)$")).unwrap();
                     if let Some(raw_text_caps) = raw_text_re.captures(html) {
-                        let raw_text = raw_text_caps.at(1).unwrap();
-                        html = raw_text_caps.at(2).unwrap_or("");
+                        let raw_text = raw_text_caps.get(1).unwrap();
+                        html = raw_text_caps.get(2).map(|c| c.as_str()).unwrap_or("");
 
                         if RCDATA.contains(&start_tag.as_str()) {
-                            _process_text_node(&current, "raw", &html_unescape(raw_text))
+                            _process_text_node(&current, "raw", &html_unescape(raw_text.as_str()))
                         } else {
-                            _process_text_node(&current, "raw", raw_text)
+                            _process_text_node(&current, "raw", raw_text.as_str())
                         }
 
                         current = _process_end_tag(&current, &start_tag);
@@ -378,22 +378,22 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
         // DOCTYPE
         else if let Some(doctype) = doctype {
-            _process_text_node(&current, "doctype", doctype);
+            _process_text_node(&current, "doctype", doctype.as_str());
         }
 
         // Comment
         else if let Some(comment) = comment {
-            _process_text_node(&current, "comment", comment);
+            _process_text_node(&current, "comment", comment.as_str());
         }
 
         // CDATA
         else if let Some(cdata) = cdata {
-            _process_text_node(&current, "cdata", cdata);
+            _process_text_node(&current, "cdata", cdata.as_str());
         }
 
         // Processing instruction
         else if let Some(pi) = pi {
-            _process_text_node(&current, "pi", pi);
+            _process_text_node(&current, "pi", pi.as_str());
         }
 
         if html.is_empty() { break; }
