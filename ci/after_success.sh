@@ -13,7 +13,7 @@ fi
 env
 
 # Build and upload docs.
-cargo doc --verbose
+cargo doc --no-deps --verbose
 echo '<meta http-equiv=refresh content=0;url=regex/index.html>' > target/doc/index.html
 ve=$(mktemp -d)
 virtualenv "$ve"
