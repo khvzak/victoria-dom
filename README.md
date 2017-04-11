@@ -6,11 +6,16 @@ Minimalistic HTML parser with CSS selectors
 The project has been inspired by [Mojo::DOM](https://metacpan.org/pod/Mojo::DOM).
 
 ### Installing
-Add the following lines to the `Cargo.toml` file:
+Add the following lines to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-victoria-dom = "0.1.*"
+victoria-dom = "0.1"
+```
+
+and this to your crate root:
+```rust
+extern crate victoria_dom;
 ```
 
 ### Examples
