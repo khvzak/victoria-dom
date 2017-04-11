@@ -10,8 +10,6 @@ if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false"
   exit 0
 fi
 
-env
-
 # Build and upload docs.
 cargo doc --no-deps --verbose
 echo '<meta http-equiv=refresh content=0;url=regex/index.html>' > target/doc/index.html
@@ -20,7 +18,7 @@ virtualenv "$ve"
 "$ve"/bin/pip install --upgrade pip
 "$ve"/bin/pip install ghp-import
 "$ve"/bin/ghp-import -n target/doc
-#git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
+git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
 
 # Install kcov.
 tmpdir=$(mktemp -d)
