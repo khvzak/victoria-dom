@@ -39,5 +39,10 @@ PATH="$tmpdir/usr/local/bin:$PATH"
 # Calculate and upload code coverage.
 tmpdir=$(mktemp -d)
 cargo test --no-run --verbose
-find ./target/debug -maxdepth 1 -type f -executable -print | xargs -n 1 kcov --exclude-pattern=/.cargo --verify "$tmpdir"
+
+find ./target/debug -maxdepth 1 -type f -executable | \
+  xargs -n 1 basename | \
+  xargs -n 1 -I CMD \
+    kcov --exclude-pattern=/.cargo --verify "$tmpdir/CMD" ./target/debug/CMD
+
 kcov --verify --coveralls-id=$TRAVIS_JOB_ID --merge target/cov "$tmpdir"/*
