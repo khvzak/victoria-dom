@@ -5,14 +5,13 @@
 
 set -e
 
-#if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false" ] || [ "$TRAVIS_BRANCH" != "master" ]; then
-if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
+if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false" ] || [ "$TRAVIS_BRANCH" != "master" ]; then
   exit 0
 fi
 
 # Build and upload docs.
 cargo doc --no-deps --verbose
-echo '<meta http-equiv=refresh content=0;url=regex/index.html>' > target/doc/index.html
+echo '<meta http-equiv=refresh content=0;url=victoria_dom/index.html>' > target/doc/index.html
 ve=$(mktemp -d)
 virtualenv "$ve"
 "$ve"/bin/pip install --upgrade pip
