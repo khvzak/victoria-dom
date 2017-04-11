@@ -1,7 +1,10 @@
 # victoria-dom
 Minimalistic HTML parser with CSS selectors
 
+[![](http://meritbadge.herokuapp.com/victoria-dom)](https://crates.io/crates/victoria-dom)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Build Status](https://travis-ci.org/khvzak/victoria-dom.svg?branch=master)](https://travis-ci.org/khvzak/victoria-dom)
+[![Coverage Status](https://coveralls.io/repos/github/khvzak/victoria-dom/badge.svg?branch=master)](https://coveralls.io/github/khvzak/victoria-dom?branch=master)
 
 The project has been inspired by [Mojo::DOM](https://metacpan.org/pod/Mojo::DOM).
 
