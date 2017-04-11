@@ -1,7 +1,12 @@
+dist: trusty
 sudo: false
-language: rust
 
-# Dependencies of kcov, used by coverage
+language: rust
+rust:
+  - stable
+  - nightly
+
+# Dependencies of kcov
 addons:
   apt:
     packages:
@@ -9,31 +14,14 @@ addons:
       - libelf-dev
       - libdw-dev
       - binutils-dev
+      - libiberty-dev
+      - wget
+      - clang-3.6
       - cmake
-    sources:
-      - kalakris-cmake
+      - python
+      - python-virtualenv
 
-rust:
-  - stable
-  - beta
-  - nightly
-
-before_script:
-  - |
-      cargo install cargo-travis &&
-      export PATH=$HOME/.cargo/bin:$PATH
-
-# the main build
-script:
-  - |
-      cargo build &&
-      cargo test &&
-      cargo bench &&
-      cargo --only stable doc
-
-after_success:
-# measure code coverage and upload to coveralls.io
-  - cargo coveralls
+after_success: ci/after_success.sh
 
 notifications:
   email:
