@@ -5,7 +5,8 @@
 
 set -e
 
-if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false" ] || [ "$TRAVIS_BRANCH" != "master" ]; then
+#if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false" ] || [ "$TRAVIS_BRANCH" != "master" ]; then
+if [ "$TRAVIS_RUST_VERSION" != "stable" ] || [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
   exit 0
 fi
 
