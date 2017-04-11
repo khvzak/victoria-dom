@@ -2,7 +2,15 @@
 name = "victoria-dom"
 version = "0.1.1"
 authors = ["Aleksandr Orlenko <zxteam@gmail.com>"]
-publish = false
+license = "MIT/Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/khvzak/victoria-dom"
+documentation = "https://khvzak.github.io/victoria-dom"
+homepage = "https://github.com/khvzak/victoria-dom"
+description = """
+Minimalistic HTML parser with CSS selectors
+"""
+categories = ["parsing"]
 
 [dependencies]
 regex = "0.2"
