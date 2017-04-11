@@ -11,6 +11,7 @@ description = """
 Minimalistic HTML parser with CSS selectors
 """
 categories = ["parsing"]
+keywords = ["html", "css", "parser"]
 
 [dependencies]
 regex = "0.2"
