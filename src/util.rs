@@ -1,7 +1,12 @@
 use std::collections::HashMap;
 use std::{char, u32};
+use std::cmp;
 
 use regex::{Regex, Captures};
+
+lazy_static! {
+    static ref ENTITY_RE: Regex = Regex::new(r#"&(?:\#((?:[0-9]{1,7}|x[0-9a-fA-F]{1,6}));|(\w+[;=]?))"#).unwrap();
+}
 
 pub fn xml_escape(text: &str) -> String {
     let mut text = text.to_owned();
@@ -24,12 +29,18 @@ pub fn xml_unescape(text: &str) -> String {
 }
 
 pub fn html_unescape(text: &str) -> String {
-    lazy_static! {
-        static ref _RE: Regex = Regex::new(r#"&(?:\#((?:[0-9]{1,7}|x[0-9a-fA-F]{1,6}));|(\w+;))"#).unwrap();
-    }
+    _html_unescape(text, false)
+}
 
-    _RE.replace_all(text, |caps: &Captures| {
-        caps.get(1).map(|x| _decode_point(x.as_str())).unwrap_or_else(|| _decode_name(caps.get(2).unwrap().as_str()))
+pub fn html_attr_unescape(text: &str) -> String {
+    _html_unescape(text, true)
+}
+
+fn _html_unescape(text: &str, is_attr: bool) -> String {
+    ENTITY_RE.replace_all(text, |caps: &Captures| {
+        caps.get(1)
+            .map(|x| _decode_point(x.as_str()))
+            .unwrap_or_else(|| _decode_name(caps.get(2).unwrap().as_str(), is_attr))
     }).into_owned()
 }
 
@@ -38,36 +49,61 @@ fn _decode_point(point: &str) -> String {
     (if point.starts_with("x") { u32::from_str_radix(&point[1..], 16) } else { u32::from_str_radix(point, 10) })
         .ok()
         .and_then(char::from_u32)
-        .map(|x| { let mut s = String::new(); s.push(x); s })
+        .map(|c| c.to_string())
         .unwrap_or(point.to_owned())
 }
 
-pub fn _decode_name(name: &str) -> String {
+pub fn _decode_name(name: &str, is_attr: bool) -> String {
+    lazy_static! {
+        static ref _ALPHANUMEQ_RE: Regex = Regex::new("[A-Za-z0-9=]").unwrap();
+    };
+
     // Named character reference
-    ENTITIES.get(name).map(|x| (*x).to_owned()).unwrap_or("&".to_owned() + name)
+    for len in 0 .. cmp::max(1, name.len()) - 1 {
+        let name_trunc = &name[0 .. (name.len() - len)];
+        let last = &name[(name.len() - len) .. cmp::min((name.len() - len) + 1, name.len())];
+        let rest = &name[(name.len() - len) .. name.len()];
+
+        if !is_attr || name_trunc.ends_with(';') || !_ALPHANUMEQ_RE.is_match(last) {
+            if let Some(&val) = ENTITIES.get(&name_trunc) {
+                return val.to_string() + rest;
+            }
+        }
+    }
+
+    "&".to_string() + name
 }
 
 lazy_static! {
     static ref ENTITIES: HashMap<&'static str, &'static str> = hashmap![
         "Aacute;" => "\u{000C1}",
+        "Aacute" => "\u{000C1}",
         "aacute;" => "\u{000E1}",
+        "aacute" => "\u{000E1}",
         "Abreve;" => "\u{00102}",
         "abreve;" => "\u{00103}",
         "ac;" => "\u{0223E}",
         "acd;" => "\u{0223F}",
         "acE;" => "\u{0223E}\u{00333}",
         "Acirc;" => "\u{000C2}",
+        "Acirc" => "\u{000C2}",
         "acirc;" => "\u{000E2}",
+        "acirc" => "\u{000E2}",
         "acute;" => "\u{000B4}",
+        "acute" => "\u{000B4}",
         "Acy;" => "\u{00410}",
         "acy;" => "\u{00430}",
         "AElig;" => "\u{000C6}",
+        "AElig" => "\u{000C6}",
         "aelig;" => "\u{000E6}",
+        "aelig" => "\u{000E6}",
         "af;" => "\u{02061}",
         "Afr;" => "\u{1D504}",
         "afr;" => "\u{1D51E}",
         "Agrave;" => "\u{000C0}",
+        "Agrave" => "\u{000C0}",
         "agrave;" => "\u{000E0}",
+        "agrave" => "\u{000E0}",
         "alefsym;" => "\u{02135}",
         "aleph;" => "\u{02135}",
         "Alpha;" => "\u{00391}",
@@ -76,7 +112,9 @@ lazy_static! {
         "amacr;" => "\u{00101}",
         "amalg;" => "\u{02A3F}",
         "AMP;" => "\u{00026}",
+        "AMP" => "\u{00026}",
         "amp;" => "\u{00026}",
+        "amp" => "\u{00026}",
         "And;" => "\u{02A53}",
         "and;" => "\u{02227}",
         "andand;" => "\u{02A55}",
@@ -115,7 +153,9 @@ lazy_static! {
         "approx;" => "\u{02248}",
         "approxeq;" => "\u{0224A}",
         "Aring;" => "\u{000C5}",
+        "Aring" => "\u{000C5}",
         "aring;" => "\u{000E5}",
+        "aring" => "\u{000E5}",
         "Ascr;" => "\u{1D49C}",
         "ascr;" => "\u{1D4B6}",
         "Assign;" => "\u{02254}",
@@ -123,9 +163,13 @@ lazy_static! {
         "asymp;" => "\u{02248}",
         "asympeq;" => "\u{0224D}",
         "Atilde;" => "\u{000C3}",
+        "Atilde" => "\u{000C3}",
         "atilde;" => "\u{000E3}",
+        "atilde" => "\u{000E3}",
         "Auml;" => "\u{000C4}",
+        "Auml" => "\u{000C4}",
         "auml;" => "\u{000E4}",
+        "auml" => "\u{000E4}",
         "awconint;" => "\u{02233}",
         "awint;" => "\u{02A11}",
         "backcong;" => "\u{0224C}",
@@ -240,6 +284,7 @@ lazy_static! {
         "Breve;" => "\u{002D8}",
         "breve;" => "\u{002D8}",
         "brvbar;" => "\u{000A6}",
+        "brvbar" => "\u{000A6}",
         "Bscr;" => "\u{0212C}",
         "bscr;" => "\u{1D4B7}",
         "bsemi;" => "\u{0204F}",
@@ -273,7 +318,9 @@ lazy_static! {
         "Ccaron;" => "\u{0010C}",
         "ccaron;" => "\u{0010D}",
         "Ccedil;" => "\u{000C7}",
+        "Ccedil" => "\u{000C7}",
         "ccedil;" => "\u{000E7}",
+        "ccedil" => "\u{000E7}",
         "Ccirc;" => "\u{00108}",
         "ccirc;" => "\u{00109}",
         "Cconint;" => "\u{02230}",
@@ -282,9 +329,11 @@ lazy_static! {
         "Cdot;" => "\u{0010A}",
         "cdot;" => "\u{0010B}",
         "cedil;" => "\u{000B8}",
+        "cedil" => "\u{000B8}",
         "Cedilla;" => "\u{000B8}",
         "cemptyv;" => "\u{029B2}",
         "cent;" => "\u{000A2}",
+        "cent" => "\u{000A2}",
         "CenterDot;" => "\u{000B7}",
         "centerdot;" => "\u{000B7}",
         "Cfr;" => "\u{0212D}",
@@ -341,7 +390,9 @@ lazy_static! {
         "coprod;" => "\u{02210}",
         "Coproduct;" => "\u{02210}",
         "COPY;" => "\u{000A9}",
+        "COPY" => "\u{000A9}",
         "copy;" => "\u{000A9}",
+        "copy" => "\u{000A9}",
         "copysr;" => "\u{02117}",
         "CounterClockwiseContourIntegral;" => "\u{02233}",
         "crarr;" => "\u{021B5}",
@@ -376,6 +427,7 @@ lazy_static! {
         "curlyvee;" => "\u{022CE}",
         "curlywedge;" => "\u{022CF}",
         "curren;" => "\u{000A4}",
+        "curren" => "\u{000A4}",
         "curvearrowleft;" => "\u{021B6}",
         "curvearrowright;" => "\u{021B7}",
         "cuvee;" => "\u{022CE}",
@@ -405,6 +457,7 @@ lazy_static! {
         "DDotrahd;" => "\u{02911}",
         "ddotseq;" => "\u{02A77}",
         "deg;" => "\u{000B0}",
+        "deg" => "\u{000B0}",
         "Del;" => "\u{02207}",
         "Delta;" => "\u{00394}",
         "delta;" => "\u{003B4}",
@@ -431,6 +484,7 @@ lazy_static! {
         "disin;" => "\u{022F2}",
         "div;" => "\u{000F7}",
         "divide;" => "\u{000F7}",
+        "divide" => "\u{000F7}",
         "divideontimes;" => "\u{022C7}",
         "divonx;" => "\u{022C7}",
         "DJcy;" => "\u{00402}",
@@ -502,13 +556,17 @@ lazy_static! {
         "dzcy;" => "\u{0045F}",
         "dzigrarr;" => "\u{027FF}",
         "Eacute;" => "\u{000C9}",
+        "Eacute" => "\u{000C9}",
         "eacute;" => "\u{000E9}",
+        "eacute" => "\u{000E9}",
         "easter;" => "\u{02A6E}",
         "Ecaron;" => "\u{0011A}",
         "ecaron;" => "\u{0011B}",
         "ecir;" => "\u{02256}",
         "Ecirc;" => "\u{000CA}",
+        "Ecirc" => "\u{000CA}",
         "ecirc;" => "\u{000EA}",
+        "ecirc" => "\u{000EA}",
         "ecolon;" => "\u{02255}",
         "Ecy;" => "\u{0042D}",
         "ecy;" => "\u{0044D}",
@@ -522,7 +580,9 @@ lazy_static! {
         "efr;" => "\u{1D522}",
         "eg;" => "\u{02A9A}",
         "Egrave;" => "\u{000C8}",
+        "Egrave" => "\u{000C8}",
         "egrave;" => "\u{000E8}",
+        "egrave" => "\u{000E8}",
         "egs;" => "\u{02A96}",
         "egsdot;" => "\u{02A98}",
         "el;" => "\u{02A99}",
@@ -578,9 +638,13 @@ lazy_static! {
         "Eta;" => "\u{00397}",
         "eta;" => "\u{003B7}",
         "ETH;" => "\u{000D0}",
+        "ETH" => "\u{000D0}",
         "eth;" => "\u{000F0}",
+        "eth" => "\u{000F0}",
         "Euml;" => "\u{000CB}",
+        "Euml" => "\u{000CB}",
         "euml;" => "\u{000EB}",
+        "euml" => "\u{000EB}",
         "euro;" => "\u{020AC}",
         "excl;" => "\u{00021}",
         "exist;" => "\u{02203}",
@@ -614,14 +678,17 @@ lazy_static! {
         "Fouriertrf;" => "\u{02131}",
         "fpartint;" => "\u{02A0D}",
         "frac12;" => "\u{000BD}",
+        "frac12" => "\u{000BD}",
         "frac13;" => "\u{02153}",
         "frac14;" => "\u{000BC}",
+        "frac14" => "\u{000BC}",
         "frac15;" => "\u{02155}",
         "frac16;" => "\u{02159}",
         "frac18;" => "\u{0215B}",
         "frac23;" => "\u{02154}",
         "frac25;" => "\u{02156}",
         "frac34;" => "\u{000BE}",
+        "frac34" => "\u{000BE}",
         "frac35;" => "\u{02157}",
         "frac38;" => "\u{0215C}",
         "frac45;" => "\u{02158}",
@@ -696,8 +763,10 @@ lazy_static! {
         "gsime;" => "\u{02A8E}",
         "gsiml;" => "\u{02A90}",
         "GT;" => "\u{0003E}",
+        "GT" => "\u{0003E}",
         "Gt;" => "\u{0226B}",
         "gt;" => "\u{0003E}",
+        "gt" => "\u{0003E}",
         "gtcc;" => "\u{02AA7}",
         "gtcir;" => "\u{02A7A}",
         "gtdot;" => "\u{022D7}",
@@ -753,21 +822,28 @@ lazy_static! {
         "hybull;" => "\u{02043}",
         "hyphen;" => "\u{02010}",
         "Iacute;" => "\u{000CD}",
+        "Iacute" => "\u{000CD}",
         "iacute;" => "\u{000ED}",
+        "iacute" => "\u{000ED}",
         "ic;" => "\u{02063}",
         "Icirc;" => "\u{000CE}",
+        "Icirc" => "\u{000CE}",
         "icirc;" => "\u{000EE}",
+        "icirc" => "\u{000EE}",
         "Icy;" => "\u{00418}",
         "icy;" => "\u{00438}",
         "Idot;" => "\u{00130}",
         "IEcy;" => "\u{00415}",
         "iecy;" => "\u{00435}",
         "iexcl;" => "\u{000A1}",
+        "iexcl" => "\u{000A1}",
         "iff;" => "\u{021D4}",
         "Ifr;" => "\u{02111}",
         "ifr;" => "\u{1D526}",
         "Igrave;" => "\u{000CC}",
+        "Igrave" => "\u{000CC}",
         "igrave;" => "\u{000EC}",
+        "igrave" => "\u{000EC}",
         "ii;" => "\u{02148}",
         "iiiint;" => "\u{02A0C}",
         "iiint;" => "\u{0222D}",
@@ -812,6 +888,7 @@ lazy_static! {
         "iota;" => "\u{003B9}",
         "iprod;" => "\u{02A3C}",
         "iquest;" => "\u{000BF}",
+        "iquest" => "\u{000BF}",
         "Iscr;" => "\u{02110}",
         "iscr;" => "\u{1D4BE}",
         "isin;" => "\u{02208}",
@@ -826,7 +903,9 @@ lazy_static! {
         "Iukcy;" => "\u{00406}",
         "iukcy;" => "\u{00456}",
         "Iuml;" => "\u{000CF}",
+        "Iuml" => "\u{000CF}",
         "iuml;" => "\u{000EF}",
+        "iuml" => "\u{000EF}",
         "Jcirc;" => "\u{00134}",
         "jcirc;" => "\u{00135}",
         "Jcy;" => "\u{00419}",
@@ -874,6 +953,7 @@ lazy_static! {
         "lap;" => "\u{02A85}",
         "Laplacetrf;" => "\u{02112}",
         "laquo;" => "\u{000AB}",
+        "laquo" => "\u{000AB}",
         "Larr;" => "\u{0219E}",
         "lArr;" => "\u{021D0}",
         "larr;" => "\u{02190}",
@@ -1054,8 +1134,10 @@ lazy_static! {
         "Lstrok;" => "\u{00141}",
         "lstrok;" => "\u{00142}",
         "LT;" => "\u{0003C}",
+        "LT" => "\u{0003C}",
         "Lt;" => "\u{0226A}",
         "lt;" => "\u{0003C}",
+        "lt" => "\u{0003C}",
         "ltcc;" => "\u{02AA6}",
         "ltcir;" => "\u{02A79}",
         "ltdot;" => "\u{022D6}",
@@ -1072,6 +1154,7 @@ lazy_static! {
         "lvertneqq;" => "\u{02268}\u{0FE00}",
         "lvnE;" => "\u{02268}\u{0FE00}",
         "macr;" => "\u{000AF}",
+        "macr" => "\u{000AF}",
         "male;" => "\u{02642}",
         "malt;" => "\u{02720}",
         "maltese;" => "\u{02720}",
@@ -1094,10 +1177,12 @@ lazy_static! {
         "mfr;" => "\u{1D52A}",
         "mho;" => "\u{02127}",
         "micro;" => "\u{000B5}",
+        "micro" => "\u{000B5}",
         "mid;" => "\u{02223}",
         "midast;" => "\u{0002A}",
         "midcir;" => "\u{02AF0}",
         "middot;" => "\u{000B7}",
+        "middot" => "\u{000B7}",
         "minus;" => "\u{02212}",
         "minusb;" => "\u{0229F}",
         "minusd;" => "\u{02238}",
@@ -1130,6 +1215,7 @@ lazy_static! {
         "natural;" => "\u{0266E}",
         "naturals;" => "\u{02115}",
         "nbsp;" => "\u{000A0}",
+        "nbsp" => "\u{000A0}",
         "nbump;" => "\u{0224E}\u{00338}",
         "nbumpe;" => "\u{0224F}\u{00338}",
         "ncap;" => "\u{02A43}",
@@ -1212,6 +1298,7 @@ lazy_static! {
         "nopf;" => "\u{1D55F}",
         "Not;" => "\u{02AEC}",
         "not;" => "\u{000AC}",
+        "not" => "\u{000AC}",
         "NotCongruent;" => "\u{02262}",
         "NotCupCap;" => "\u{0226D}",
         "NotDoubleVerticalBar;" => "\u{02226}",
@@ -1321,7 +1408,9 @@ lazy_static! {
         "nsupseteqq;" => "\u{02AC6}\u{00338}",
         "ntgl;" => "\u{02279}",
         "Ntilde;" => "\u{000D1}",
+        "Ntilde" => "\u{000D1}",
         "ntilde;" => "\u{000F1}",
+        "ntilde" => "\u{000F1}",
         "ntlg;" => "\u{02278}",
         "ntriangleleft;" => "\u{022EA}",
         "ntrianglelefteq;" => "\u{022EC}",
@@ -1354,11 +1443,15 @@ lazy_static! {
         "nwarrow;" => "\u{02196}",
         "nwnear;" => "\u{02927}",
         "Oacute;" => "\u{000D3}",
+        "Oacute" => "\u{000D3}",
         "oacute;" => "\u{000F3}",
+        "oacute" => "\u{000F3}",
         "oast;" => "\u{0229B}",
         "ocir;" => "\u{0229A}",
         "Ocirc;" => "\u{000D4}",
+        "Ocirc" => "\u{000D4}",
         "ocirc;" => "\u{000F4}",
+        "ocirc" => "\u{000F4}",
         "Ocy;" => "\u{0041E}",
         "ocy;" => "\u{0043E}",
         "odash;" => "\u{0229D}",
@@ -1374,7 +1467,9 @@ lazy_static! {
         "ofr;" => "\u{1D52C}",
         "ogon;" => "\u{002DB}",
         "Ograve;" => "\u{000D2}",
+        "Ograve" => "\u{000D2}",
         "ograve;" => "\u{000F2}",
+        "ograve" => "\u{000F2}",
         "ogt;" => "\u{029C1}",
         "ohbar;" => "\u{029B5}",
         "ohm;" => "\u{003A9}",
@@ -1406,7 +1501,9 @@ lazy_static! {
         "order;" => "\u{02134}",
         "orderof;" => "\u{02134}",
         "ordf;" => "\u{000AA}",
+        "ordf" => "\u{000AA}",
         "ordm;" => "\u{000BA}",
+        "ordm" => "\u{000BA}",
         "origof;" => "\u{022B6}",
         "oror;" => "\u{02A56}",
         "orslope;" => "\u{02A57}",
@@ -1415,15 +1512,21 @@ lazy_static! {
         "Oscr;" => "\u{1D4AA}",
         "oscr;" => "\u{02134}",
         "Oslash;" => "\u{000D8}",
+        "Oslash" => "\u{000D8}",
         "oslash;" => "\u{000F8}",
+        "oslash" => "\u{000F8}",
         "osol;" => "\u{02298}",
         "Otilde;" => "\u{000D5}",
+        "Otilde" => "\u{000D5}",
         "otilde;" => "\u{000F5}",
+        "otilde" => "\u{000F5}",
         "Otimes;" => "\u{02A37}",
         "otimes;" => "\u{02297}",
         "otimesas;" => "\u{02A36}",
         "Ouml;" => "\u{000D6}",
+        "Ouml" => "\u{000D6}",
         "ouml;" => "\u{000F6}",
+        "ouml" => "\u{000F6}",
         "ovbar;" => "\u{0233D}",
         "OverBar;" => "\u{0203E}",
         "OverBrace;" => "\u{023DE}",
@@ -1431,6 +1534,7 @@ lazy_static! {
         "OverParenthesis;" => "\u{023DC}",
         "par;" => "\u{02225}",
         "para;" => "\u{000B6}",
+        "para" => "\u{000B6}",
         "parallel;" => "\u{02225}",
         "parsim;" => "\u{02AF3}",
         "parsl;" => "\u{02AFD}",
@@ -1466,6 +1570,7 @@ lazy_static! {
         "pluse;" => "\u{02A72}",
         "PlusMinus;" => "\u{000B1}",
         "plusmn;" => "\u{000B1}",
+        "plusmn" => "\u{000B1}",
         "plussim;" => "\u{02A26}",
         "plustwo;" => "\u{02A27}",
         "pm;" => "\u{000B1}",
@@ -1474,6 +1579,7 @@ lazy_static! {
         "Popf;" => "\u{02119}",
         "popf;" => "\u{1D561}",
         "pound;" => "\u{000A3}",
+        "pound" => "\u{000A3}",
         "Pr;" => "\u{02ABB}",
         "pr;" => "\u{0227A}",
         "prap;" => "\u{02AB7}",
@@ -1527,7 +1633,9 @@ lazy_static! {
         "quest;" => "\u{0003F}",
         "questeq;" => "\u{0225F}",
         "QUOT;" => "\u{00022}",
+        "QUOT" => "\u{00022}",
         "quot;" => "\u{00022}",
+        "quot" => "\u{00022}",
         "rAarr;" => "\u{021DB}",
         "race;" => "\u{0223D}\u{00331}",
         "Racute;" => "\u{00154}",
@@ -1540,6 +1648,7 @@ lazy_static! {
         "range;" => "\u{029A5}",
         "rangle;" => "\u{027E9}",
         "raquo;" => "\u{000BB}",
+        "raquo" => "\u{000BB}",
         "Rarr;" => "\u{021A0}",
         "rArr;" => "\u{021D2}",
         "rarr;" => "\u{02192}",
@@ -1588,7 +1697,9 @@ lazy_static! {
         "reals;" => "\u{0211D}",
         "rect;" => "\u{025AD}",
         "REG;" => "\u{000AE}",
+        "REG" => "\u{000AE}",
         "reg;" => "\u{000AE}",
+        "reg" => "\u{000AE}",
         "ReverseElement;" => "\u{0220B}",
         "ReverseEquilibrium;" => "\u{021CB}",
         "ReverseUpEquilibrium;" => "\u{0296F}",
@@ -1704,6 +1815,7 @@ lazy_static! {
         "searr;" => "\u{02198}",
         "searrow;" => "\u{02198}",
         "sect;" => "\u{000A7}",
+        "sect" => "\u{000A7}",
         "semi;" => "\u{0003B}",
         "seswar;" => "\u{02929}",
         "setminus;" => "\u{02216}",
@@ -1724,6 +1836,7 @@ lazy_static! {
         "ShortRightArrow;" => "\u{02192}",
         "ShortUpArrow;" => "\u{02191}",
         "shy;" => "\u{000AD}",
+        "shy" => "\u{000AD}",
         "Sigma;" => "\u{003A3}",
         "sigma;" => "\u{003C3}",
         "sigmaf;" => "\u{003C2}",
@@ -1835,8 +1948,11 @@ lazy_static! {
         "Sup;" => "\u{022D1}",
         "sup;" => "\u{02283}",
         "sup1;" => "\u{000B9}",
+        "sup1" => "\u{000B9}",
         "sup2;" => "\u{000B2}",
+        "sup2" => "\u{000B2}",
         "sup3;" => "\u{000B3}",
+        "sup3" => "\u{000B3}",
         "supdot;" => "\u{02ABE}",
         "supdsub;" => "\u{02AD8}",
         "supE;" => "\u{02AC6}",
@@ -1866,6 +1982,7 @@ lazy_static! {
         "swarrow;" => "\u{02199}",
         "swnwar;" => "\u{0292A}",
         "szlig;" => "\u{000DF}",
+        "szlig" => "\u{000DF}",
         "Tab;" => "\u{00009}",
         "target;" => "\u{02316}",
         "Tau;" => "\u{003A4}",
@@ -1896,13 +2013,16 @@ lazy_static! {
         "thkap;" => "\u{02248}",
         "thksim;" => "\u{0223C}",
         "THORN;" => "\u{000DE}",
+        "THORN" => "\u{000DE}",
         "thorn;" => "\u{000FE}",
+        "thorn" => "\u{000FE}",
         "Tilde;" => "\u{0223C}",
         "tilde;" => "\u{002DC}",
         "TildeEqual;" => "\u{02243}",
         "TildeFullEqual;" => "\u{02245}",
         "TildeTilde;" => "\u{02248}",
         "times;" => "\u{000D7}",
+        "times" => "\u{000D7}",
         "timesb;" => "\u{022A0}",
         "timesbar;" => "\u{02A31}",
         "timesd;" => "\u{02A30}",
@@ -1945,7 +2065,9 @@ lazy_static! {
         "twoheadleftarrow;" => "\u{0219E}",
         "twoheadrightarrow;" => "\u{021A0}",
         "Uacute;" => "\u{000DA}",
+        "Uacute" => "\u{000DA}",
         "uacute;" => "\u{000FA}",
+        "uacute" => "\u{000FA}",
         "Uarr;" => "\u{0219F}",
         "uArr;" => "\u{021D1}",
         "uarr;" => "\u{02191}",
@@ -1955,7 +2077,9 @@ lazy_static! {
         "Ubreve;" => "\u{0016C}",
         "ubreve;" => "\u{0016D}",
         "Ucirc;" => "\u{000DB}",
+        "Ucirc" => "\u{000DB}",
         "ucirc;" => "\u{000FB}",
+        "ucirc" => "\u{000FB}",
         "Ucy;" => "\u{00423}",
         "ucy;" => "\u{00443}",
         "udarr;" => "\u{021C5}",
@@ -1966,7 +2090,9 @@ lazy_static! {
         "Ufr;" => "\u{1D518}",
         "ufr;" => "\u{1D532}",
         "Ugrave;" => "\u{000D9}",
+        "Ugrave" => "\u{000D9}",
         "ugrave;" => "\u{000F9}",
+        "ugrave" => "\u{000F9}",
         "uHar;" => "\u{02963}",
         "uharl;" => "\u{021BF}",
         "uharr;" => "\u{021BE}",
@@ -1978,6 +2104,7 @@ lazy_static! {
         "Umacr;" => "\u{0016A}",
         "umacr;" => "\u{0016B}",
         "uml;" => "\u{000A8}",
+        "uml" => "\u{000A8}",
         "UnderBar;" => "\u{0005F}",
         "UnderBrace;" => "\u{023DF}",
         "UnderBracket;" => "\u{023B5}",
@@ -2025,7 +2152,9 @@ lazy_static! {
         "utrif;" => "\u{025B4}",
         "uuarr;" => "\u{021C8}",
         "Uuml;" => "\u{000DC}",
+        "Uuml" => "\u{000DC}",
         "uuml;" => "\u{000FC}",
+        "uuml" => "\u{000FC}",
         "uwangle;" => "\u{029A7}",
         "vangrt;" => "\u{0299C}",
         "varepsilon;" => "\u{003F5}",
@@ -2131,7 +2260,9 @@ lazy_static! {
         "xvee;" => "\u{022C1}",
         "xwedge;" => "\u{022C0}",
         "Yacute;" => "\u{000DD}",
+        "Yacute" => "\u{000DD}",
         "yacute;" => "\u{000FD}",
+        "yacute" => "\u{000FD}",
         "YAcy;" => "\u{0042F}",
         "yacy;" => "\u{0044F}",
         "Ycirc;" => "\u{00176}",
@@ -2139,6 +2270,7 @@ lazy_static! {
         "Ycy;" => "\u{0042B}",
         "ycy;" => "\u{0044B}",
         "yen;" => "\u{000A5}",
+        "yen" => "\u{000A5}",
         "Yfr;" => "\u{1D51C}",
         "yfr;" => "\u{1D536}",
         "YIcy;" => "\u{00407}",
@@ -2151,6 +2283,7 @@ lazy_static! {
         "yucy;" => "\u{0044E}",
         "Yuml;" => "\u{00178}",
         "yuml;" => "\u{000FF}",
+        "yuml" => "\u{000FF}",
         "Zacute;" => "\u{00179}",
         "zacute;" => "\u{0017A}",
         "Zcaron;" => "\u{0017D}",
@@ -2175,4 +2308,18 @@ lazy_static! {
         "zwj;" => "\u{0200D}",
         "zwnj;" => "\u{0200C}",
     ];
+}
+
+#[cfg(test)]
+mod tests {
+    use ::util::html_attr_unescape;
+
+    #[test]
+    fn test_html_attr_unescape() {
+        assert_eq!(html_attr_unescape("/?foo&lt=bar"), "/?foo&lt=bar".to_string());
+        assert_eq!(html_attr_unescape("/?f&ltoo=bar"), "/?f&ltoo=bar".to_string());
+        assert_eq!(html_attr_unescape("/?f&lt-oo=bar"), "/?f<-oo=bar".to_string());
+        assert_eq!(html_attr_unescape("/?foo=&lt"), "/?foo=<".to_string());
+        assert_eq!(html_attr_unescape("/?f&lt;oo=bar"), "/?f<oo=bar".to_string());
+    }
 }

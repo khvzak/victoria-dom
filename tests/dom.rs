@@ -325,6 +325,15 @@ fn multi_line_attr() {
 }
 
 #[test]
+fn entities_in_attrs() {
+    assert_eq!(DOM::new("<a href=\"/?foo&lt=bar\"></a>").at("a").unwrap().attr("href").unwrap(), "/?foo&lt=bar");
+    assert_eq!(DOM::new("<a href=\"/?f&ltoo=bar\"></a>").at("a").unwrap().attr("href").unwrap(), "/?f&ltoo=bar");
+    assert_eq!(DOM::new("<a href=\"/?f&lt-oo=bar\"></a>").at("a").unwrap().attr("href").unwrap(), "/?f<-oo=bar");
+    assert_eq!(DOM::new("<a href=\"/?foo=&lt\"></a>").at("a").unwrap().attr("href").unwrap(), "/?foo=<");
+    assert_eq!(DOM::new("<a href=\"/?f&lt;oo=bar\"></a>").at("a").unwrap().attr("href").unwrap(), "/?f<oo=bar");
+}
+
+#[test]
 fn whitespaces_before_closing_bracket() {
     // Whitespaces before closing bracket
     let dom = DOM::new("<div >content</div>");

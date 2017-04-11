@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use uuid::Uuid;
 use regex::{self, Regex};
 
-use util::{xml_escape, html_unescape};
+use util::{xml_escape, html_unescape, html_attr_unescape};
 
 lazy_static! {
     static ref ATTR_RE_STR: String = String::new() +
@@ -342,7 +342,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
                     }
 
                     attrs.insert(key, match value {
-                        Some(ref x) => Some(html_unescape(x.as_str())),
+                        Some(ref x) => Some(html_attr_unescape(x.as_str())),
                         _ => None,
                     });
                 }

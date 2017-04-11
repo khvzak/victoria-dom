@@ -1,6 +1,6 @@
 [package]
 name = "victoria-dom"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Aleksandr Orlenko <zxteam@gmail.com>"]
 publish = false
 

@@ -192,7 +192,7 @@ impl DOM {
         self._text(true, true) // recursive trimmed
     }
 
-    /// Extract text content from all descendant nodes of the current element with smart whitespace trimming.
+    /// Extract text content from all descendant nodes of the current element without smart whitespace trimming.
     ///
     /// ```
     /// use victoria_dom::DOM;
