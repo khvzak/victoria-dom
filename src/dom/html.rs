@@ -1,8 +1,8 @@
 use std::collections::{HashSet, HashMap, BTreeMap};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 
-use uuid::Uuid;
 use regex::{self, Regex};
 
 use util::{xml_escape, html_unescape, html_attr_unescape};
@@ -121,9 +121,11 @@ lazy_static! {
     ];
 }
 
+static NODE_ID_NEXT: AtomicUsize = ATOMIC_USIZE_INIT;
+
 #[derive(Debug)]
 pub struct TreeNode {
-    pub id: Uuid,
+    pub id: usize,
     pub parent: Option<Weak<TreeNode>>,
     pub elem: NodeElem,
 }
@@ -196,7 +198,7 @@ impl TreeNode {
 fn _process_text_node(current: &Rc<TreeNode>, elem_type: &str, content: &str) {
     let new_node = Rc::new(
         TreeNode {
-            id: Uuid::new_v4(),
+            id: NODE_ID_NEXT.fetch_add(1, Ordering::Relaxed),
             parent: Some(Rc::downgrade(current)),
             elem: NodeElem::Text { elem_type: elem_type.to_owned(), content: content.to_owned() },
         }
@@ -238,7 +240,7 @@ fn _process_start_tag(current: &Rc<TreeNode>, start_tag: &str, attrs: BTreeMap<S
     // New tag
     let new_node = Rc::new(
         TreeNode {
-            id: Uuid::new_v4(),
+            id: NODE_ID_NEXT.fetch_add(1, Ordering::Relaxed),
             parent: Some(Rc::downgrade(&working_node)),
             elem: NodeElem::Tag { name: start_tag.to_owned(), attrs: attrs, childs: RefCell::new(Vec::new()) },
         }
@@ -282,7 +284,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
 
     let root = Rc::new(
         TreeNode {
-            id: Uuid::new_v4(),
+            id: NODE_ID_NEXT.fetch_add(1, Ordering::Relaxed),
             parent: None,
             elem: NodeElem::Root { childs: RefCell::new(Vec::new()) },
         }

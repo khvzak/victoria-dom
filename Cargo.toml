@@ -16,5 +16,4 @@ keywords = ["html", "css", "parser"]
 [dependencies]
 regex = "0.2"
 lazy_static = "0.2"
-uuid = { version = "0.4.0", features = ["v4"] }
 maplit = "0.1"
