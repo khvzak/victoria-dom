@@ -14,6 +14,6 @@ categories = ["parsing"]
 keywords = ["html", "css", "parser"]
 
 [dependencies]
-regex = "0.2"
-lazy_static = "0.2"
-maplit = "0.1"
+regex = "1.0"
+lazy_static = "1.0"
+maplit = "1.0"
