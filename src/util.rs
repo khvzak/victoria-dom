@@ -18,16 +18,6 @@ pub fn xml_escape(text: &str) -> String {
     text
 }
 
-pub fn xml_unescape(text: &str) -> String {
-    let mut text = text.to_owned();
-    text = text.replace("&#39;", "'");
-    text = text.replace("&quot;", "\"");
-    text = text.replace("&lt;", "<");
-    text = text.replace("&gt;", ">");
-    text = text.replace("&amp;", "&");
-    text
-}
-
 pub fn html_unescape(text: &str) -> String {
     _html_unescape(text, false)
 }

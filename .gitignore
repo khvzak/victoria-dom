@@ -1,5 +1,2 @@
-.idea/
-target/
-Cargo.lock
-.DS_Store
-src/gen.pl
+/target
+/Cargo.lock

@@ -9,6 +9,7 @@ use regex::Regex;
 use self::html::TreeNode;
 
 /// The HTML `DOM` type
+#[derive(Debug)]
 pub struct DOM {
     tree: Rc<TreeNode>,
 }

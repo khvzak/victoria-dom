@@ -1,8 +1,7 @@
-// lib.rs
-// This crate is a library
-#![crate_type = "lib"]
-// The library is named "victoria_dom"
-#![crate_name = "victoria_dom"]
+#![doc(html_root_url = "https://docs.rs/victoria-dom/0.1.1")]
+#![deny(missing_docs)]
+#![deny(warnings)]
+#![deny(missing_debug_implementations)]
 
 //! Minimalistic HTML parser with CSS selectors
 //!

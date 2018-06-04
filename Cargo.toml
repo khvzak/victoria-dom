@@ -1,11 +1,11 @@
 [package]
 name = "victoria-dom"
-version = "0.1.1"
+version = "0.1.1" # remember to update html_root_url
 authors = ["Aleksandr Orlenko <zxteam@gmail.com>"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/khvzak/victoria-dom"
-documentation = "https://khvzak.github.io/victoria-dom"
+documentation = "https://docs.rs/victoria-dom"
 homepage = "https://github.com/khvzak/victoria-dom"
 description = """
 Minimalistic HTML parser with CSS selectors
