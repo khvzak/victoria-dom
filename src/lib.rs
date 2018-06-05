@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/victoria-dom/0.1.1")]
+#![doc(html_root_url = "https://docs.rs/victoria-dom/0.1.2")]
 #![deny(missing_docs)]
 #![deny(warnings)]
 #![deny(missing_debug_implementations)]
