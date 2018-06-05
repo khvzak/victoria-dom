@@ -11,6 +11,13 @@ fn empty_vals() {
 }
 
 #[test]
+fn nodestroy() {
+    // fix issue #4
+    let dom = DOM::new("<html>").childs(None);
+    assert_eq!(dom[0].text(), "");
+}
+
+#[test]
 fn basic1() {
     // Simple (basics)
     let dom = DOM::new(r#"<div><div FOO="0" id="a">A</div><div id="b" myAttr>B</div></div>"#);

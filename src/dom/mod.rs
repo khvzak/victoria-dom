@@ -11,6 +11,7 @@ use self::html::TreeNode;
 /// The HTML `DOM` type
 #[derive(Debug)]
 pub struct DOM {
+    root: Rc<TreeNode>, // To avoid destroying the root node ahead of time
     tree: Rc<TreeNode>,
 }
 
@@ -22,7 +23,8 @@ impl DOM {
     /// let dom = DOM::new("<div id=\"title\">Hello</div>");
     /// ```
     pub fn new(html: &str) -> DOM {
-        DOM { tree: html::parse(html) }
+        let tree = html::parse(html);
+        DOM { root: tree.clone(), tree: tree }
     }
 
     /// Find all ancestor elements of the current element matching the optional CSS selector
@@ -39,7 +41,7 @@ impl DOM {
         let mut node = self.tree.clone();
         while let Some(parent) = node.get_parent() {
             if parent.is_tag() && (selector.is_none() || css::matches(&parent, selector.unwrap())) {
-                ancestors.push(DOM { tree: parent.clone() });
+                ancestors.push(DOM { root: self.root.clone(), tree: parent.clone() });
             }
             node = parent;
         }
@@ -50,7 +52,7 @@ impl DOM {
     /// or `None` if none could be found.
     pub fn at(&self, selector: &str) -> Option<DOM> {
         if let Some(node) = css::select_one(&self.tree, selector) {
-            return Some(DOM { tree: node })
+            return Some(DOM { root: self.root.clone(), tree: node })
         }
         None
     }
@@ -81,7 +83,7 @@ impl DOM {
     pub fn childs(&self, selector: Option<&str>) -> Vec<DOM> {
         self.tree.get_childs().unwrap_or(Vec::new()).into_iter().filter_map(|x|
             if x.is_tag() && (selector.is_none() || css::matches(&x, selector.unwrap())) {
-                Some(DOM { tree: x })
+                Some(DOM { root: self.root.clone(), tree: x })
             } else {
                 None
             }
@@ -97,7 +99,7 @@ impl DOM {
     /// assert_eq!(elems, ["a", "c", "b"]);
     /// ```
     pub fn find(&self, selector: &str) -> Vec<DOM> {
-        css::select(&self.tree, selector, 0).into_iter().map(|x| DOM { tree: x }).collect()
+        css::select(&self.tree, selector, 0).into_iter().map(|x| DOM { root: self.root.clone(), tree: x }).collect()
     }
 
     /// Check if the current element matches the CSS selector.
@@ -116,12 +118,12 @@ impl DOM {
     pub fn following(&self, selector: Option<&str>) -> Vec<DOM> {
         self._siblings().into_iter().skip_while(|x| x.id != self.tree.id).skip(1)
             .filter(|x| selector.is_none() || css::matches(x, selector.unwrap()))
-            .map(|x| DOM { tree: x }).collect()
+            .map(|x| DOM { root: self.root.clone(), tree: x }).collect()
     }
 
     /// Return a DOM object for next sibling element, or `None` if there are no more siblings.
     pub fn next(&self) -> Option<DOM> {
-        self._siblings().into_iter().skip_while(|x| x.id != self.tree.id).skip(1).next().map(|x| DOM { tree: x })
+        self._siblings().into_iter().skip_while(|x| x.id != self.tree.id).skip(1).next().map(|x| DOM { root: self.root.clone(), tree: x })
     }
 
     /// Find all sibling elements before the current element matching the CSS selector and return a Vector of DOM objects of these elements.
@@ -135,12 +137,12 @@ impl DOM {
     pub fn preceding(&self, selector: Option<&str>) -> Vec<DOM> {
         self._siblings().into_iter().take_while(|x| x.id != self.tree.id)
             .filter(|x| selector.is_none() || css::matches(x, selector.unwrap()))
-            .map(|x| DOM { tree: x }).collect()
+            .map(|x| DOM { root: self.root.clone(), tree: x }).collect()
     }
 
     /// Return a DOM object for the previous sibling element, or `None` if there are no more siblings.
     pub fn prev(&self) -> Option<DOM> {
-        self._siblings().into_iter().take_while(|x| x.id != self.tree.id).last().map(|x| DOM { tree: x })
+        self._siblings().into_iter().take_while(|x| x.id != self.tree.id).last().map(|x| DOM { root: self.root.clone(), tree: x })
     }
 
     fn _siblings(&self) -> Vec<Rc<TreeNode>> {
@@ -152,7 +154,7 @@ impl DOM {
 
     /// Return a DOM object for the parent of the current element, or `None` if this element has no parent.
     pub fn parent(&self) -> Option<DOM> {
-        self.tree.get_parent().map(|x| DOM { tree: x })
+        self.tree.get_parent().map(|x| DOM { root: self.root.clone(), tree: x })
     }
 
     /// Render the current element and its content to HTML.
