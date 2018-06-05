@@ -1,9 +1,11 @@
 # victoria-dom
 Minimalistic HTML parser with CSS selectors
 
-[![](https://img.shields.io/crates/v/victoria-dom.svg)](https://crates.io/crates/victoria-dom)
+[![crates.io](https://img.shields.io/crates/v/victoria-dom.svg)](https://crates.io/crates/victoria-dom)
 [![Build Status](https://travis-ci.org/khvzak/victoria-dom.svg?branch=master)](https://travis-ci.org/khvzak/victoria-dom)
 [![Coverage Status](https://coveralls.io/repos/github/khvzak/victoria-dom/badge.svg?branch=master)](https://coveralls.io/github/khvzak/victoria-dom?branch=master)
+[![Released API docs](https://docs.rs/victoria-dom/badge.svg)](https://docs.rs/victoria-dom)
+[![Master API docs](https://img.shields.io/badge/docs-master-green.svg)](https://khvzak.github.io/victoria-dom/)
 
 The project has been inspired by [Mojo::DOM](https://metacpan.org/pod/Mojo::DOM).
 
@@ -36,4 +38,4 @@ fn main() {
 ```
 
 ### Documentation
-https://khvzak.github.io/victoria-dom/
+https://docs.rs/victoria-dom
