@@ -1,31 +1,49 @@
 dist: trusty
-sudo: false
+sudo: required
 
 language: rust
-rust:
-  - stable
-  - nightly
+matrix:
+  fast_finish: true
+  include:
+    - rust: nightly
+    - rust: stable
+      env: BUILD_DOCS=1
 
 # Dependencies of kcov
 addons:
   apt:
+    update: true
     packages:
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
       - binutils-dev
       - libiberty-dev
-      - wget
-      - clang-3.6
-      - cmake
-      - python
-      - python-virtualenv
 
-after_success: ci/after_success.sh
+after_success:
+  - |
+    [ "$BUILD_DOCS" = "1" ] &&
+      LOCAL="~/.local" && export PATH=$LOCAL/bin:$PATH &&
+      wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+      tar xzf master.tar.gz && mkdir kcov-master/build && cd kcov-master/build &&
+      cmake -DCMAKE_INSTALL_PREFIX:PATH=$LOCAL .. && make && make install && cd ../.. &&
+      cargo clean &&
+      RUSTFLAGS="-C link-dead-code" cargo test --no-run &&
+      for file in target/debug/*; do
+        if [[ -f $file && -x $file ]]; then
+          mkdir -p "target/cov/$(basename $file)";
+          kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file";
+        fi;
+      done &&
+      kcov --coveralls-id=$TRAVIS_JOB_ID --merge target/cov target/cov/*
+  - |
+    [ "$TRAVIS_PULL_REQUEST" = "false" ] && [ "$BUILD_DOCS" = "1" ] &&
+    { [ "$TRAVIS_TAG" != "" ] || [ "$TRAVIS_BRANCH" == "master" ]; } &&
+    ./.travis/docs.sh
 
 env:
   global:
-    secure: "m8Ra/pFowl2AG/V2hl8Wpr5FSc1lXd+R9teZ9MZt5gXojwyiQhN8yOHhB6xG5IpzJhooaGUU2Ux0vjxvxsagkAce/Cp5mwgG00DDUzxhzfRI8JQ8mK6ZZq+EQr2I4CnLiwv12vfGMO2Lzk2rwMPdQARMabJiBu8+76OSdZoFur7HvK2ux6uYIO4RCszYnmG24c69+QSJEnUCGWRn7/uaUVoAQkLlb6f8Y7wIU9q/UCs955n1R1NrujnaEwz6ILVc1WSnpEtN6BMETxH4FX8GbfHO963xDhaSqz14jZ7DCxbwv7oEhTpuWfZPNidkQpkliRcJuQHLs6ql+ywaZQq9+lzt+WkEwVrgKDbNmB2xeKr8DyjZHJbfgJ2c8gG2/fjhC0iUUbv891XSsxLZ68cDa1cE5lXUOzIUjSvFgau0TEkLsC5u1FDBjmccTBDTWwCq8utK09bVlnmEdqFIdh6TXboPpma106XpwatePFu5UiiHbtlZCZG5Joa1WDF+7tkQhhlC/PfcSMD5CvrMwudoiA5ZS7/y2ySRyDttlwSDVyec0keo47iyfw3bUuCTG5WisD5BfF+rmd4TgpTf9A05TkWHUycSr5wXDfJ22c35r1OE5DNtTRZ5vj0YDdAYnS1nL5z9h8xgWV3zKExZVCJavrc/oyJc3f0F8Os1JULbToc="
+    - RUST_BACKTRACE=1
 
 notifications:
   email:
