@@ -1,1 +1,0 @@
-initSidebarItems({"struct":[["DOM","The HTML `DOM` type"]]});
