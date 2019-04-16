@@ -1,7 +1,7 @@
 use std::collections::{HashSet, HashMap, BTreeMap};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use regex::{self, Regex};
 
@@ -121,7 +121,7 @@ lazy_static! {
     ];
 }
 
-static NODE_ID_NEXT: AtomicUsize = ATOMIC_USIZE_INIT;
+static NODE_ID_NEXT: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Debug)]
 pub struct TreeNode {
@@ -321,7 +321,7 @@ pub fn parse(html: &str) -> Rc<TreeNode> {
         if let Some(tag) = tag {
             // End: /tag
             if tag.as_str().starts_with("/") {
-                let end_tag = tag.as_str().trim_left_matches('/').trim().to_lowercase();
+                let end_tag = tag.as_str().trim_start_matches('/').trim().to_lowercase();
                 current = _process_end_tag(&current, &end_tag);
             }
             // Start: tag
