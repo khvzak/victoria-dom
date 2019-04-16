@@ -121,7 +121,7 @@ lazy_static! {
     ];
 }
 
-static NODE_ID_NEXT: AtomicUsize = AtomicUsize::new(1);
+static NODE_ID_NEXT: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 pub struct TreeNode {
